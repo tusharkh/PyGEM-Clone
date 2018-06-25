@@ -150,4 +150,6 @@ modelparameters = [input.lrgcm, input.lrglac, input.precfactor, input.precgrad, 
                                glacier_gcm_elev, glacier_gcm_lrgcm, glacier_gcm_lrglac, dates_table, 
                                option_areaconstant=1))  
 
-#model_glac_mb = glac_wide_massbaltotal.sum()
+model_glac_mb = glac_wide_massbaltotal.sum()
+
+print('initial answer equals:', model_glac_mb)
