@@ -23,6 +23,9 @@ import matplotlib.pyplot as plt
 from time import strftime
 import xarray as xr
 import netCDF4 as nc
+import matplotlib.pyplot as plt
+plt.style.use('seaborn-darkgrid')
+import pymc3 as pm
 
 import pygem_input as input
 import pygemfxns_modelsetup as modelsetup
@@ -139,6 +142,53 @@ glacier_cal_data = ((cal_data.iloc[np.where(
 modelparameters = [input.lrgcm, input.lrglac, input.precfactor, input.precgrad, input.ddfsnow, input.ddfice, 
                    input.tempsnow, input.tempchange]
 
+#wrap mass balance calculation in a function
+def get_mass_balance(precfactor=None, ddfsnow=None, tempchange=None):
+
+    modelparameters_copy = modelparameters.copy()
+    if precfactor is not None:
+        modelparameters_copy[2] = precfactor
+    if ddfsnow is not None:
+        modelparameters_copy[4] = ddfsnow
+    if tempchange is not None:
+        modelparameters_copy[7] = tempchange
+
+    # Mass balance calculations
+    (glac_bin_temp, glac_bin_prec, glac_bin_acc, glac_bin_refreeze, glac_bin_snowpack, glac_bin_melt, 
+     glac_bin_frontalablation, glac_bin_massbalclim, glac_bin_massbalclim_annual, glac_bin_area_annual, 
+     glac_bin_icethickness_annual, glac_bin_width_annual, glac_bin_surfacetype_annual, 
+     glac_wide_massbaltotal, glac_wide_runoff, glac_wide_snowline, glac_wide_snowpack, 
+     glac_wide_area_annual, glac_wide_volume_annual, glac_wide_ELA_annual) = (
+        massbalance.runmassbalance(modelparameters_copy, glacier_rgi_table, glacier_area_t0, icethickness_t0, 
+                                   width_t0, elev_bins, glacier_gcm_temp, glacier_gcm_prec, 
+                                   glacier_gcm_elev, glacier_gcm_lrgcm, glacier_gcm_lrglac, dates_table, 
+                                   option_areaconstant=1))  
+
+    # Mass balance calculations
+    return glac_wide_massbaltotal, glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
+
+# function for finding measured glacier data
+def get_glacier_data(glacier_number):
+    '''
+    Returns the mass balance and error estimate for
+    the glacier given the filepath of the DEM file and
+    the glacier number in the for <glacier_region>.<number>
+    '''
+    csv_path = '../DEMs/hma_mb_20171211_1343.csv'
+    observed_data = pd.read_csv(csv_path)
+    #there is definitely a better way to do this
+    observed_data['glacno'] = ((observed_data['RGIId'] % 1) * 10**5).round(0).astype(int)
+    index =  observed_data.index[observed_data['glacno']==glacier_number].tolist()[0]
+    mass_bal = observed_data['mb_mwea'][index]
+    error = observed_data['mb_mwea_sigma'][index]
+    
+    return mass_bal, error, index
+
+glacier_number = int(rgi_glac_number[0])
+observed_massbal, observed_error, index = get_glacier_data(glacier_number)
+
+glac_wide_massbaltotal, model_massbal = get_mass_balance() 
+'''
 # Mass balance calculations
 (glac_bin_temp, glac_bin_prec, glac_bin_acc, glac_bin_refreeze, glac_bin_snowpack, glac_bin_melt, 
  glac_bin_frontalablation, glac_bin_massbalclim, glac_bin_massbalclim_annual, glac_bin_area_annual, 
@@ -150,6 +200,38 @@ modelparameters = [input.lrgcm, input.lrglac, input.precfactor, input.precgrad, 
                                glacier_gcm_elev, glacier_gcm_lrgcm, glacier_gcm_lrglac, dates_table, 
                                option_areaconstant=1))  
 
-model_glac_mb = glac_wide_massbaltotal.sum()
 
-print('initial answer equals:', model_glac_mb)
+# Mass balance calculations
+# Mass balance calculations
+model_glac_mb = glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
+'''
+print(glac_wide_massbaltotal)
+print('initial answer equals:', model_massbal)
+print('glacier number:', glacier_number)
+print('observed mass balance:', observed_massbal)
+
+#%#%# start the MCMC model
+test_glacier_model = pm.Model()
+
+with test_glacier_model:
+
+    #Create prior probability distributions, based on
+    #current understanding of ranges
+
+    #Precipitation factor, based on range of 0.5 to 2
+    # we use gamma function to get this range, with shape parameter
+    # alpha=6.33 (also known as k) and rate parameter beta=6 (inverse of
+    # scale parameter theta)
+    precfactor = pm.Gamma('precfactor', alpha=6.33, beta=6)
+    #Degree day of snow, based on (add reference to paper)
+    ddfsnow = pm.Normal('ddfsnow', mu=0.0041, sd=0.0015)
+    #Temperature change, based on range of -5 o 5
+    tempchange = pm.Normal('tempchange', mu=0, sd=2)
+
+    #expected value of mass balance
+    model_massbal = get_mass_balance(precfactor=precfactor, ddfsnow=ddfsnow,
+                                     tempchange=tempchange)
+    
+    # observed distribution
+    obs_massbal = pm.Normal('obs_massbal', mu=model_massbal, sd=observed_error,
+                            observed=observed_massbal)
