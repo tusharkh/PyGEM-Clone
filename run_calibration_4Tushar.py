@@ -181,7 +181,7 @@ def get_glacier_data(glacier_number):
     index =  observed_data.index[observed_data['glacno']==glacier_number].tolist()[0]
     mass_bal = observed_data['mb_mwea'][index]
     error = observed_data['mb_mwea_sigma'][index]
-    
+
     return mass_bal, error, index
 
 glacier_number = int(rgi_glac_number[0])
@@ -205,10 +205,11 @@ glac_wide_massbaltotal, model_massbal = get_mass_balance()
 # Mass balance calculations
 model_glac_mb = glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
 '''
-print(glac_wide_massbaltotal)
+print(glac_wide_massbaltotal, type(glac_wide_massbaltotal))
 print('initial answer equals:', model_massbal)
-print('glacier number:', glacier_number)
-print('observed mass balance:', observed_massbal)
+print('glacier number:', glacier_number, type(glacier_number))
+print('observed mass balance:', observed_massbal, type(observed_massbal))
+print('observed mass balance error:', observed_error, type(observed_error))
 
 #%#%# start the MCMC model
 test_glacier_model = pm.Model()
@@ -231,7 +232,7 @@ with test_glacier_model:
     #expected value of mass balance
     model_massbal = get_mass_balance(precfactor=precfactor, ddfsnow=ddfsnow,
                                      tempchange=tempchange)
-    
+
     # observed distribution
     obs_massbal = pm.Normal('obs_massbal', mu=model_massbal, sd=observed_error,
                             observed=observed_massbal)
