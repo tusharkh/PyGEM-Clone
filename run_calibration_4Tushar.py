@@ -211,6 +211,19 @@ print('glacier number:', glacier_number, type(glacier_number))
 print('observed mass balance:', observed_massbal, type(observed_massbal))
 print('observed mass balance error:', observed_error, type(observed_error))
 
+print('\n\nRound 2')
+
+
+glac_wide_massbaltotal2, model_massbal2 = get_mass_balance(precfactor=1, ddfsnow=0.0041,
+                                                          tempchange=0)
+
+print(glac_wide_massbaltotal2, type(glac_wide_massbaltotal2))
+print('initial answer equals:', model_massbal2)
+print('glacier number:', glacier_number, type(glacier_number))
+print('observed mass balance:', observed_massbal, type(observed_massbal))
+print('observed mass balance error:', observed_error, type(observed_error))
+
+'''
 #%#%# start the MCMC model
 test_glacier_model = pm.Model()
 
@@ -235,4 +248,4 @@ with test_glacier_model:
 
     # observed distribution
     obs_massbal = pm.Normal('obs_massbal', mu=model_massbal, sd=observed_error,
-                            observed=observed_massbal)
+                            observed=observed_massbal)'''
