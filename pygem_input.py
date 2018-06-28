@@ -162,6 +162,13 @@ rgi_glacno_float_colname = 'RGIId_float'
 rgi_cols_drop = ['GLIMSId','BgnDate','EndDate','Status','Connect','Surging','Linkages','Name']
 # Dictionary of hypsometry filenames
 rgi_dict = {
+            1:  '01_rgi60_Alaska.csv',
+            3:  '03_rgi60_ArcticCanadaNorth.csv',
+            4:  '04_rgi60_ArcticCanadaSouth.csv',
+            6:  '06_rgi60_Iceland.csv',
+            7:  '07_rgi60_Svalbard.csv',
+            8:  '08_rgi60_Scandinavia.csv',
+            9:  '09_rgi60_RussianArctic.csv',
             13: '13_rgi60_CentralAsia.csv',
             14: '14_rgi60_SouthAsiaWest.csv',
             15: '15_rgi60_SouthAsiaEast.csv'}
@@ -174,6 +181,13 @@ hyps_filepath = main_directory + '/../IceThickness_Huss/bands_10m_DRR/'
 # Dictionary of hypsometry filenames 
 # (Files from Matthias Huss should be manually pre-processed to be 'RGI-ID', 'Cont_range', and bins starting at 5)
 hyps_filedict = {
+                1:  'area_01_Huss_Alaska_10m.csv',
+                3:  'area_RGI03_10.csv',
+                4:  'area_RGI04_10.csv',
+                6:  'area_RGI06_10.csv',
+                7:  'area_RGI07_10.csv',
+                8:  'area_RGI08_10.csv',
+                9:  'area_RGI09_10.csv',
                 13: 'area_13_Huss_CentralAsia_10m.csv',
                 14: 'area_14_Huss_SouthAsiaWest_10m.csv',
                 15: 'area_15_Huss_SouthAsiaEast_10m.csv'}
@@ -183,6 +197,13 @@ hyps_colsdrop = ['RGI-ID','Cont_range']
 thickness_filepath = main_directory + '/../IceThickness_Huss/bands_10m_DRR/'
 # Dictionary of thickness filenames
 thickness_filedict = {
+                1:  'thickness_01_Huss_Alaska_10m.csv',
+                3:  'thickness_RGI03_10.csv',
+                4:  'thickness_RGI04_10.csv',
+                6:  'thickness_RGI06_10.csv',
+                7:  'thickness_RGI07_10.csv',
+                8:  'thickness_RGI08_10.csv',
+                9:  'thickness_RGI09_10.csv',
                 13: 'thickness_13_Huss_CentralAsia_10m.csv',
                 14: 'thickness_14_Huss_SouthAsiaWest_10m.csv',
                 15: 'thickness_15_Huss_SouthAsiaEast_10m.csv'}
@@ -192,6 +213,13 @@ thickness_colsdrop = ['RGI-ID','Cont_range']
 width_filepath = main_directory + '/../IceThickness_Huss/bands_10m_DRR/'
 # Dictionary of thickness filenames
 width_filedict = {
+                1:  'width_01_Huss_Alaska_10m.csv',
+                3:  'width_RGI03_10.csv',
+                4:  'width_RGI04_10.csv',
+                6:  'width_RGI06_10.csv',
+                7:  'width_RGI07_10.csv',
+                8:  'width_RGI08_10.csv',
+                9:  'width_RGI09_10.csv',
                 13: 'width_13_Huss_CentralAsia_10m.csv',
                 14: 'width_14_Huss_SouthAsiaWest_10m.csv',
                 15: 'width_15_Huss_SouthAsiaEast_10m.csv'}
@@ -229,46 +257,25 @@ timestep = 'monthly'
 #  calendar year example: 2000 would end on December 2000
 
 # Seasonal dictionaries for WGMS data that is not provided
-dict_winter_start = {1:  [10, 1],
-                     2:  [10, 1],
-                     3:  [9, ],
-                     4:  [],
-                     5:  [],
-                     6:  [],
-                     7:  [],
-                     8:  [],
-                     9:  [],
-                     10: [],
-                     11: [],
-                     12: [],
-                     13: [11, 1],
-                     14: [11, 1],
-                     15: [11, 1],
-                     16: [],
-                     17: [],
-                     18: [],
-                     19: []
-                     }
-dict_summer_start = {1:  [5, 15],
-                     2:  [5, 15],
-                     3:  [],
-                     4:  [],
-                     5:  [],
-                     6:  [],
-                     7:  [],
-                     8:  [],
-                     9:  [],
-                     10: [],
-                     11: [],
-                     12: [],
-                     13: [5, 15],
-                     14: [5, 15],
-                     15: [5, 15],
-                     16: [],
-                     17: [],
-                     18: [],
-                     19: []
-                     }
+lat_threshold = 75
+# Winter (start/end) and Summer (start/end)
+monthdict = {'northernmost': [9, 5, 6, 8],
+             'north': [10, 4, 5, 9],
+             'south': [4, 9, 10, 3],
+             'southernmost': [3, 10, 11, 2]}
+
+# Latitude threshold
+# 01 - Alaska - < 75
+# 02 - W Can - < 75
+# 03 - N Can - > 74
+# 04 - S Can - < 74
+# 05 - Greenland - 60 - 80
+# 06 - Iceland - < 75
+# 07 - Svalbard - 70 - 80
+# 08 - Scandinavia - < 70
+# 09 - Russia - 72 - 82
+# 10 - N Asia - 46 - 77
+
 
 #%% CALIBRATION DATA (05/30/2018)
 #  for each mass balance dataset, store the parameters here and add to the class
@@ -285,9 +292,25 @@ shean_area_cn = 'area_m2'
 shean_vol_cn = 'mb_m3wea'
 shean_vol_err_cn = 'mb_m3wea_sigma'
 
-# WGMS (ee) glaciological mass balance
-wgms_ee_fp = main_directory + '/../WGMS/DOI-WGMS-FoG-2018-06/'
-wgms_ee_fn = 'wgms_ee_rgiv6_preprocessed.csv' 
+# WGMS data
+wgms_datasets = ['wgms_d', 'wgms_ee']
+#wgms_datasets = ['wgms_d']
+wgms_fp = main_directory + '/../WGMS/DOI-WGMS-FoG-2018-06/'
+wgms_obs_type_cn = 'obs_type'
+# WGMS lookup tables information
+wgms_lookup_fn = 'WGMS-FoG-2018-06-AA-GLACIER-ID-LUT.csv'
+rgilookup_fullfn = main_directory + '/../RGI/rgi60/00_rgi60_links/00_rgi60_links.csv'
+rgiv6_fn_prefix = main_directory + '/../RGI/rgi60/00_rgi60_attribs/' + '*'
+rgiv5_fn_prefix = main_directory + '/../RGI/00_rgi50_attribs/' + '*'
+
+# WGMS (d) geodetic mass balance information
+wgms_d_fn = 'WGMS-FoG-2018-06-D-CHANGE.csv'
+wgms_d_fn_preprocessed = 'wgms_d_rgiv6_preprocessed.csv'
+
+# WGMS (e/ee) glaciological mass balance information
+wgms_e_fn = 'WGMS-FoG-2018-06-E-MASS-BALANCE-OVERVIEW.csv'
+wgms_ee_fn = 'WGMS-FoG-2018-06-EE-MASS-BALANCE.csv'
+wgms_ee_fn_preprocessed = 'wgms_ee_rgiv6_preprocessed.csv' 
 wgms_ee_rgi_glacno_cn = 'glacno'
 wgms_ee_mb_cn = 'BALANCE'
 wgms_ee_mb_err_cn = 'BALANCE_UNC'
@@ -295,7 +318,7 @@ wgms_ee_t1_cn = 'YEAR'
 wgms_ee_z1_cn = 'LOWER_BOUND'
 wgms_ee_z2_cn = 'UPPER_BOUND'
 wgms_ee_period_cn = 'period'
-wgms_ee_obs_type_cn = 'obs_type'
+
 
 
 brun_fp = main_directory + '/../DEMs/'
@@ -306,6 +329,14 @@ option_mb_envelope = 1
 
 # Mass change tolerance [%] - required for calibration
 masschange_tolerance = 0.1
+
+# Mass balance uncertainty [mwea]
+massbal_uncertainty_mwea = 0.1
+# Z-score tolerance
+#  all refers to tolerance if multiple calibration points
+#  single refers to tolerance if only a single calibration point since we want this to be more exact
+zscore_tolerance_all = 1
+zscore_tolerance_single = 0.1
 
 
 # Geodetic mass balance dataset
