@@ -117,10 +117,23 @@ def hypsometrystats(hyps_table, thickness_table):
     glac_volume = (hyps_table * thickness_table/1000).sum(axis=1)
     # Mean glacier elevation
     glac_hyps_mean = np.zeros(glac_volume.shape)
-    glac_hyps_mean[glac_volume > 0] = ((hyps_table[glac_volume > 0].values * 
-                                        hyps_table[glac_volume > 0].columns.values.astype(int)).sum(axis=1) / 
-                                       hyps_table[glac_volume > 0].values.sum(axis=1))
-    # Median computations
+    #tushar debug addition
+    if len(hyps_table[glac_volume > 0].columns.values.astype(int)) == 0:
+        batman = np.reshape(hyps_table[glac_volume > 0].columns.values.astype(int), (1,hyps_table[glac_volume > 0].columns.values.astype(int).shape[0]))
+    else:
+        batman = hyps_table[glac_volume > 0].columns.values.astype(int)
+    print(hyps_table[glac_volume > 0].values.shape, hyps_table[glac_volume > 0].columns.values.astype(int).shape)
+    print(glac_hyps_mean, glac_hyps_mean.shape)
+#    glac_hyps_mean[glac_volume > 0] = ((hyps_table[glac_volume > 0].values * 
+#                                        batman.sum(axis=1) / 
+#                                       hyps_table[glac_volume > 0].values.sum(axis=1))
+#    print(glac_hyps_mean, glac_hyps_mean.shape)
+    return glac_volume, glac_hyps_mean
+
+ #    glac_hyps_mean[glac_volume > 0] = ((hyps_table[glac_volume > 0].values * 
+#                                        hyps_table[glac_volume > 0].columns.values.astype(int)).sum(axis=1) / 
+#                                       hyps_table[glac_volume > 0].values.sum(axis=1))
+                                      # Median computations
 #    main_glac_hyps_cumsum = np.cumsum(hyps_table, axis=1)
 #    for glac in range(hyps_table.shape[0]):
 #        # Median glacier elevation
@@ -129,7 +142,6 @@ def hypsometrystats(hyps_table, thickness_table):
 #        series_glac_hyps_cumsumnorm_positions = (np.where(series_glac_hyps_cumsumnorm > 0.5))[0]
 #        glac_hyps_median = main_glac_hyps.columns.values[series_glac_hyps_cumsumnorm_positions[0]]
 #    NOTE THERE IS A 20 m (+/- 5 m) OFFSET BETWEEN THE 10 m PRODUCT FROM HUSS AND THE RGI INVENTORY """
-    return glac_volume, glac_hyps_mean
 
 
 def import_Husstable(rgi_table, rgi_regionsO1, filepath, filedict, drop_col_names,
@@ -228,10 +240,7 @@ def selectglaciersrgitable(rgi_regionsO1=input.rgi_regionsO1,
     # Create an empty dataframe
     glacier_table = pd.DataFrame()
     for x_region in rgi_regionsO1:
-        try:
-            csv_regionO1 = pd.read_csv(rgi_filepath + rgi_dict[x_region])
-        except:
-            csv_regionO1 = pd.read_csv(rgi_filepath + rgi_dict[x_region], encoding='latin1')
+        csv_regionO1 = pd.read_csv(rgi_filepath + rgi_dict[x_region])
         # Populate glacer_table with the glaciers of interest
         if rgi_regionsO2 == 'all' and rgi_glac_number == 'all':
             print(f"All glaciers within region(s) {rgi_regionsO1} are included in this model run.")
