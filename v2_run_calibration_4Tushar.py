@@ -170,6 +170,33 @@ def get_mass_balance(precfactor=None, ddfsnow=None, tempchange=None):
     return glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
 #    return glac_wide_massbaltotal, glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
 
+
+def get_mass_balance_array(precfactor=None, ddfsnow=None, tempchange=None):
+
+    modelparameters_copy = modelparameters.copy()
+    if precfactor is not None:
+        modelparameters_copy[2] = float(precfactor)
+    if ddfsnow is not None:
+        modelparameters_copy[4] = float(ddfsnow)
+    if tempchange is not None:
+        modelparameters_copy[7] = float(tempchange)
+
+    # Mass balance calculations
+    (glac_bin_temp, glac_bin_prec, glac_bin_acc, glac_bin_refreeze, glac_bin_snowpack, glac_bin_melt, 
+     glac_bin_frontalablation, glac_bin_massbalclim, glac_bin_massbalclim_annual, glac_bin_area_annual, 
+     glac_bin_icethickness_annual, glac_bin_width_annual, glac_bin_surfacetype_annual, 
+     glac_wide_massbaltotal, glac_wide_runoff, glac_wide_snowline, glac_wide_snowpack, 
+     glac_wide_area_annual, glac_wide_volume_annual, glac_wide_ELA_annual) = (
+        massbalance.runmassbalance(modelparameters_copy, glacier_rgi_table, glacier_area_t0, icethickness_t0, 
+                                   width_t0, elev_bins, glacier_gcm_temp, glacier_gcm_prec, 
+                                   glacier_gcm_elev, glacier_gcm_lrgcm, glacier_gcm_lrglac, dates_table, 
+                                   option_areaconstant=1))  
+
+    # Mass balance calculations
+#    return glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
+    return glac_wide_massbaltotal, glac_wide_massbaltotal[4:].sum() / (2015.75-2000.112)
+
+
 # function for finding measured glacier data
 def get_glacier_data(glacier_number):
     '''
@@ -261,40 +288,4 @@ with test_glacier_model:
 
     step = pm.Metropolis()
     trace = pm.sample(50, step=step)
-'''
-'''
-# Define data and stochastics
-
-#Create prior probability distributions, based on
-#current understanding of ranges
-
-#Precipitation factor, based on range of 0.5 to 2
-# we use gamma function to get this range, with shape parameter
-# alpha=6.33 (also known as k) and rate parameter beta=6 (inverse of
-# scale parameter theta)
-precfactor = Gamma('precfactor', alpha=6.33, beta=6)
-#Degree day of snow, based on (add reference to paper)
-ddfsnow = Normal('ddfsnow', mu=0.0041, sd=0.0015)
-#Temperature change, based on range of -5 o 5
-tempchange = Normal('tempchange', mu=0, sd=2)
-
-
-switchpoint = DiscreteUniform(
-    'switchpoint',
-    lower=0,
-    upper=110,
-    doc='Switchpoint[year]')
-early_mean = Exponential('early_mean', beta=1.)
-late_mean = Exponential('late_mean', beta=1.)
-
-
-@deterministic(plot=False)
-def rate(s=switchpoint, e=early_mean, l=late_mean):
-    Concatenate Poisson means 
-    out = empty(len(disasters_array))
-    out[:s] = e
-    out[s:] = l
-    return out
-
-disasters = Poisson('disasters', mu=rate, value=disasters_array, observed=True)
 '''

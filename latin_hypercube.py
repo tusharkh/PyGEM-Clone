@@ -17,8 +17,10 @@ def sample(distributions, samples=10, criterion=None):
 
     Parameters
     ----------
-    distributions : array_like of array_like
-        A list of the distributions to be sampled.
+    distributions : numpy.ndarray
+        An array of the distributions to be sampled.
+        Distributions are represented by an array of
+        discrete points.
     samples : int
         Number of samples to be returned. (default: 10)
     criterion: str
@@ -40,10 +42,10 @@ def sample(distributions, samples=10, criterion=None):
 
     Returns
     -------
-    list of np.array
-        List of arrays each representing a sampling. The
+    numpy.ndarray
+        Array of arrays each representing a sampling. The
         order of values in the samples is the same as the
-        order of the distributions arg passed
+        order of the distributions argument passed
 
     """
 
