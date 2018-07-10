@@ -28,7 +28,7 @@ def mass_bal(p=precfactor, d=ddfsnow, t=tempchange):
 obs_massbal = Normal('obs_massbal', mu=mass_bal, tau=observed_error,
                      value=float(observed_massbal), observed=True)
 
-def run_MCMC(iterations, burn=0, thin=1, tune_interval=1000,
+def run_MCMC(iterations=10, burn=0, thin=1, tune_interval=1000,
              tune_throughout=True, save_interval=None,
              burn_till_tuned=False, stop_tuning_after=5,
              verbose=0, progress_bar=True, dbname='trial.pickle'):
@@ -56,10 +56,10 @@ def run_MCMC(iterations, burn=0, thin=1, tune_interval=1000,
         Variables will be tallied at intervals of this many iterations, default 1
     tune_interval : int
         Step methods will be tuned at intervals of this many iterations, default 1000
-        tune_throughout : boolean
+    tune_throughout : boolean
         If true, tuning will continue after the burnin period (True); otherwise tuning
         will halt at the end of the burnin period.
-        save_interval : int or None
+    save_interval : int or None
         If given, the model state will be saved at intervals of this many iterations
     verbose : boolean
     progress_bar : boolean
@@ -96,16 +96,17 @@ def run_MCMC(iterations, burn=0, thin=1, tune_interval=1000,
     if False:
         pass
     else:
-        model = MCMC(pm, db='pickle', dbname=dbname)
+        model = MCMC([precfactor, tempchange, ddfsnow, mass_bal, obs_massbal],
+                     db='pickle', dbname=dbname)
 
-    # set step if specified
-    if step == 'am':
-        model.use_step_method(pymc.AdaptiveMetropolis,
-                          [precfactor, ddfsnow, tempchange],
-                          delay = 1000)
+#    # set step if specified
+#    if step == 'am':
+#        model.use_step_method(pymc.AdaptiveMetropolis,
+#                          [precfactor, ddfsnow, tempchange],
+#                          delay = 1000)
 
     # sample
-    model.sample(iterations=iterations, burn=burn, thin=thin,
+    model.sample(iter=iterations, burn=burn, thin=thin,
                  tune_interval=tune_interval, tune_throughout=tune_throughout,
                  save_interval=save_interval, verbose=verbose,
                  progress_bar=progress_bar)

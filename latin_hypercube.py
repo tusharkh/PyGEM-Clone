@@ -1,6 +1,7 @@
 import pyDOE as pe
 import numpy as np
 import copy
+import pandas as pd
 
 
 def sample(distributions, samples=10, criterion=None):
@@ -89,3 +90,110 @@ def sample(distributions, samples=10, criterion=None):
 
     print(result, type(result), type(result[1]))
     return result
+
+def sample2(tempchange, ddfsnow, precfactor, massbal,
+            samples=10, criterion=None):
+    """
+    Performes a latin_hypercube sampling of
+    the given random probability distributions.
+
+    Takes the output of the MCMC sampling in the
+    form of the traces of each of the three variables
+    we look at (tempchange, ddfsnow, precfactor) and
+    the trace of the massbalance, and performs a latin
+    hypercube sampling of these traces using only the
+    distribution of mass balances. This function uses
+    pyDOE and the specificed pyDOE algorithm. Returns
+    a pandas dataframe with each row representing one
+    hypercube sampling, ie a single set of parameters
+    and their respective mass balance.
+
+    Note: given traces must have the same length
+
+    Parameters
+    ----------
+    tempchange : numpy.array
+        The trace (or markov chain) of tempchange
+        outputed by the MCMC sampling. Each trace
+        is represented by an array of discrete
+        values or points
+    ddfsnow : numpy.array
+        The trace (or markov chain) of ddfsnow
+        outputed by the MCMC sampling. Each trace
+        is represented by an array of discrete
+        values or points
+    precfactor : numpy.array
+        The trace (or markov chain) of precfactor
+        outputed by the MCMC sampling. Each trace
+        is represented by an array of discrete
+        values or points
+    massbal : numpy.array
+        The trace (or markov chain) of mass balance
+        outputed by the MCMC sampling. Each trace
+        is represented by an array of discrete
+        values or points
+    distributions : numpy.ndarray
+        An array of the distributions to be sampled.
+        Distributions are represented by an array of
+        discrete points.
+    samples : int
+        Number of samples to be returned. (default: 10)
+    criterion: str
+        a string that tells the pyDOE lhs function
+        how to sample the points (default: None,
+        which simply randomizes the points within
+        the intervals):
+            “center” or “c”: center the points within
+            the sampling intervals
+            “maximin” or “m”: maximize the minimum
+            distance between points, but place the
+            point in a randomized location within its
+            interval
+            “centermaximin” or “cm”: same as “maximin”,
+            but centered within the intervals
+            “correlation” or “corr”: minimize the
+            maximum correlation coefficient
+
+
+    Returns
+    -------
+    pandas.DataFrame
+        Dataframe with each row representing a sampling, i.e.
+        each row is a set of parameters and their respective
+        mass balance. Includes a column for each parameter and
+        for massbal
+
+    """
+
+    # make dataframe out of given traces
+    df = pd.DataFrame({'tempchange': tempchange,
+                       'precfactor': precfactor,
+                       'ddfsnow': ddfsnow, 'massbal': massbal})
+
+    # sort dataframe based on values of massbal and add
+    # extra indices based on sorted order
+    sort_df = df.sort_values('massbal')
+    sort_df['sorted_index'] = np.arange(len(sort_df))
+
+    #debug
+    print('sorted_df\n', sort_df)
+
+    # use pyDOE, get lhs sampling for 1 distribution
+    lhd = pe.lhs(n=1, samples=samples, criterion=criterion)
+
+    # convert lhs to indices for dataframe
+    lhd = (lhd * len(df)).astype(int)
+    lhd = lhd.ravel()
+
+    #debug
+    print('lhd\n', lhd)
+
+    # take sampling with lhs indices, re-sort according to
+    # original trace indices
+    subset = sort_df.iloc[lhd]
+    subset = subset.sort_index()
+
+    # debug
+    print('subset\n', subset)
+
+    return subset
