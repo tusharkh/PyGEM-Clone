@@ -25,7 +25,7 @@ def mass_bal(p=precfactor, d=ddfsnow, t=tempchange):
     return v2.get_mass_balance(precfactor=p, ddfsnow=d, tempchange=t)
 
 # observed distribution
-obs_massbal = Normal('obs_massbal', mu=mass_bal, tau=observed_error,
+obs_massbal = Normal('obs_massbal', mu=mass_bal, tau=(1/(observed_error**2)),
                      value=float(observed_massbal), observed=True)
 
 def run_MCMC(iterations=10, burn=0, thin=1, tune_interval=1000,
