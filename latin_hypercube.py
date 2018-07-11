@@ -69,42 +69,77 @@ def sample1(tempchange, precfactor, ddfsnow,
     precfactor_copy = copy.deepcopy(precfactor)
     ddfsnow_snow = copy.deepcopy(ddfsnow)
 
-    print('copy of arguments:', tempchange_copy)
+    # debug
+    print('copy of tempchange:', tempchange_copy)
+    print('copy of precfactor:', precfactor_copy)
+    print('copy of ddfsnow:', ddfsnow_copy)
 
-    for dist in dists_copy:
-        dist.sort()
-    print('copy of sorted argument:', dists_copy)
-    lhd = pe.lhs(n=len(dists_copy), samples=samples,
-                 criterion=criterion)
+    traces = [tempchange_copy, precfactor_copy,
+              ddfsnow_copy]
 
+    # sort the traces
+    for trace in traces:
+        traces.sort()
+
+#    tempchange_copy.sort()
+#    precfactor_copy.sort()
+#    ddfsnow_copy.sort()
+
+    # debug
+    print('sorted copy of tempchange:', tempchange_copy)
+    print('sorted copy of precfactor:', precfactor_copy)
+    print('sorted copy of ddfsnow:', ddfsnow_copy)
+
+    lhd = pe.lhs(n=3, samples=samples, criterion=criterion)
+
+#    for dist in dists_copy:
+#        dist.sort()
+#    print('copy of sorted argument:', dists_copy)
+#    lhd = pe.lhs(n=len(dists_copy), samples=samples,
+#                 criterion=criterion)
+
+    # debug
     print('copy of lhs samples:', lhd)
 
     lhd = np.ndarray.transpose(lhd)
 
-
+    # debug
     print('copy of lhs samples transposed:', lhd)
 
-    for i in range(0, len(dists_copy)):
-        lhd[i] = len(dists_copy[i]) * lhd[i]
+    for i in range(len(traces)):
+        lhd[i] *= len(traces[i])
+
+#    for i in range(0, len(dists_copy)):
+#        lhd[i] = len(dists_copy[i]) * lhd[i]
 
     lhd = lhd.astype(int)
 
-
+    # debug
     print('copy of lhs samples ints:', lhd)
 
-    matrix = []
-    for i in range(0, len(lhd)):
+    names = ['tempchange', 'precfactor', 'ddfsnow']
+    samples = pd.DataFrame()
+
+    for i in range(len(traces)):
         array = []
-        for j in range(0, len(lhd[i])):
-            print(i, j,  dists_copy[i][lhd[i][j]])
-            array.append(dists_copy[i][lhd[i][j]])
-        matrix.append(np.array(array))
+        for j in range(len(lhd[i])):
+            print(i, j, traces[i][lhd[i][j]])
+            array.append(traces[i][lhd[i][j]])
+        samples[names[i]] = array
 
-    result = np.array(matrix)
-    result = np.ndarray.transpose(result)
+#    matrix = []
+#    for i in range(0, len(lhd)):
+#        array = []
+#        for j in range(0, len(lhd[i])):
+#            print(i, j,  dists_copy[i][lhd[i][j]])
+#            array.append(dists_copy[i][lhd[i][j]])
+#        matrix.append(np.array(array))
 
-    print(result, type(result), type(result[1]))
-    return result
+#    result = np.array(matrix)
+#    result = np.ndarray.transpose(result)
+
+    print(samples, type(samples))
+    return samples
 
 
 def sample(distributions, samples=10, criterion=None):
