@@ -114,7 +114,7 @@ def hypsometrystats(hyps_table, thickness_table):
     Output is a series of the glacier volume [km**3] and mean elevation values [m a.s.l.]. 
     """
     # Glacier volume [km**3]
-    glac_volume = (hyps_table * thickness_table/1000).sum(axis=1)
+    glac_volume = (hyps_table * thickness_table/1000).sum(axis=1).values
     # Mean glacier elevation
     glac_hyps_mean = np.zeros(glac_volume.shape)
     #tushar debug addition
