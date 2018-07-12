@@ -182,7 +182,7 @@ def find_mass_balace(samples, replace=True):
         massbalances.append(massbalance)
 
     # add to dataframe
-    samples['massbalance'] = massbalances
+    samples['massbal'] = massbalances
 
     return samples
 
@@ -314,10 +314,6 @@ def sample2(tempchange, ddfsnow, precfactor, massbal,
         outputed by the MCMC sampling. Each trace
         is represented by an array of discrete
         values or points
-    distributions : numpy.ndarray
-        An array of the distributions to be sampled.
-        Distributions are represented by an array of
-        discrete points.
     samples : int
         Number of samples to be returned. (default: 10)
     criterion: str
@@ -358,7 +354,7 @@ def sample2(tempchange, ddfsnow, precfactor, massbal,
     sort_df['sorted_index'] = np.arange(len(sort_df))
 
     #debug
-    print('sorted_df\n', sort_df)
+#    print('sorted_df\n', sort_df)
 
     # use pyDOE, get lhs sampling for 1 distribution
     lhd = pe.lhs(n=1, samples=samples, criterion=criterion)
@@ -368,7 +364,7 @@ def sample2(tempchange, ddfsnow, precfactor, massbal,
     lhd = lhd.ravel()
 
     #debug
-    print('lhd\n', lhd)
+#    print('lhd\n', lhd)
 
     # take sampling with lhs indices, re-sort according to
     # original trace indices
@@ -376,6 +372,6 @@ def sample2(tempchange, ddfsnow, precfactor, massbal,
     subset = subset.sort_index()
 
     # debug
-    print('subset\n', subset)
+#    print('subset\n', subset)
 
     return subset
