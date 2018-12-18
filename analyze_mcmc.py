@@ -38,7 +38,7 @@ acorr_maxlags = 100
 
 # Export option
 #output_filepath = input.main_directory + '/../Output/'
-suffix = '_15000'
+suffix = '_trunc'
 mcmc_data_fp = input.main_directory + '/../MCMC_data/'
 mcmc_prior_fp = mcmc_data_fp + 'prior_comparison/'
 mcmc_output_netcdf_fp = input.main_directory + '/../MCMC_data/netcdf' + suffix + '/'
@@ -992,10 +992,119 @@ def plot_mc_results2(netcdf_fn, glacier_cal_data, burns=[0,1000,3000,5000],
                 str(c_len) + 'iter' + '.png', bbox_inches='tight')
 
 
+def plot_mc_results3(iters, region='all', burn=0):
+    """
+    Plot gelman-rubin statistic, effective_n (autocorrelation with lag
+    100) and markov chain error plots.
+
+    Takes the output from the Markov Chain model and plots the results
+    for the mass balance, temperature change, precipitation factor,
+    and degree day factor of snow.  Also, outputs the plots associated
+    with the model.
+
+    Parameters
+    ----------
+    iters : int
+        Number of iterations associated with the Markov Chain
+    burn : list of ints
+        List of burn in values to plot for Gelman-Rubin stats
+
+    Returns
+    -------
+    .png files
+        saves figure showing how assessment values change with
+        number of mcmc iterations
+    """
+
+    # hard code some variable names (dirty solution)
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+    vn_title_dict = {'massbal':'Mass Balance',
+                     'precfactor':'Precipitation Factor',
+                     'tempchange':'Temperature Bias',
+                     'ddfsnow':'DDF Snow'}
+    metric_title_dict = {'Gelman-Rubin':'Gelman-Rubin Statistic',
+                         'MC Error': 'Monte Carlo Error',
+                         'Effective N': 'Effective Sample Size'}
+    metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+
+    # hard code font sizes
+    ticks=10
+    suptitle=14
+    title=10
+    titley = 1.05
+    label=10
+    plotline=2
+    plotline2=1
+    legend=10
+    figsize=(6.5, 9)
+    dpi=100
+    hspace=0.6
+    wspace=0.6
+    sup_y = 0.97
+    nrows=4
+    ncols=3
+    num_stds=1
+    alpha = 0.7
+    s_alpha = 0.5
+
+    # bins and ticks
+    bdict = {}
+    tdict = {}
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    m_len = len(metrics)
+    v_len = len(variables)
+
+    # create subplot for each variable
+    for v_count, vn in enumerate(variables):
+
+        df = pd.read_csv(mcmc_output_csv_fp + 'assessment_plot_' +
+                         str(region) + 'region_' + str(burn) +
+                         'burn_' + str(vn) + '.csv')
+
+        #create subplot for each metric
+        for m_count, metric in enumerate(metrics):
+
+            x = df['Iter']
+            mean = df[metric + ' mean']
+            std = df[metric + ' std']
+
+            # plot histogram
+            ax = plt.subplot(nrows, ncols, m_len*v_count+m_count+1)
+
+            ax.plot(x, mean, alpha=alpha)
+
+            #plot error region
+            ax.fill_between(x, mean-(num_stds*std),
+                     mean+(num_stds*std), alpha=s_alpha)
+
+            # niceties
+            if v_count == 0:
+                plt.title(metric_title_dict[metric], fontsize=title, y=titley)
+
+            # axis labels
+            if metric=='MC Error':
+                ylabel = metric
+            else:
+                ylabel = metric + ' value'
+
+            if m_count == 0:
+                ax.set_ylabel(vn_title_dict[vn] + '\n\n' + ylabel, fontsize=label, labelpad=0)
+            else:
+                ax.set_ylabel(ylabel, fontsize=label)
+
+    # Save figure
+    plt.savefig(mcmc_output_figures_fp + 'assessment_plot' + str(region) +
+                'region_' + str(burn) + 'burn.png',
+                bbox_inches='tight')
+
 def write_table(region=15, iters=1000, burn=0):
     '''
     Writes a csv table that lists MCMC assessment values for
     each glacier (represented by a netcdf file.
+
 
     Writes out the values of effective_n (autocorrelation with
     lag 100), Gelman-Rubin Statistic, MC_error.
@@ -1032,7 +1141,7 @@ def write_table(region=15, iters=1000, burn=0):
         filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
 
     # for testing
-    filelist = filelist[0:10]
+    filelist = filelist[10:20]
 
     for vn in variables:
 
@@ -1054,6 +1163,14 @@ def write_table(region=15, iters=1000, burn=0):
                 # calculate metrics
                 en = effective_n(ds, vn=vn, iters=iters, burn=burn)
                 mc = MC_error(ds, vn=vn, iters=iters, burn=burn)[0]
+
+
+                # divide MC Error by the mean values
+                mean = abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values))
+                mc /= mean
+                mc *= 100.0
+                mc_error.append(mc)
+
                 if len(ds.chain) > 1:
                     gr = gelman_rubin(ds, vn=vn, iters=iters, burn=burn)
 
@@ -1063,16 +1180,12 @@ def write_table(region=15, iters=1000, burn=0):
                 # test if multiple chains exist
                 if len(ds.chain) > 1:
                     gelman_rubin_list.append(gr)
-                mc_error.append(mc)
 
                 ds.close()
 
             except:
                 print('Error, glacier: ', netcdf)
                 pass
-
-        mean = abs(np.mean(mc_error))
-        mc_error /= mean
 
         # create dataframe
         data = {'Glacier': glac_no,
@@ -1090,6 +1203,117 @@ def write_table(region=15, iters=1000, burn=0):
         dfs.append(df)
 
     return dfs
+
+
+def write_table2(iters, region='all', burn=0):
+    '''
+    Writes a csv table that lists mean MCMC assessment values for
+    each glacier (represented by a netcdf file) for all glaciers at
+    different chain lengths.
+
+    Writes out the values of effective_n (autocorrelation with
+    lag 100), Gelman-Rubin Statistic, MC_error.
+
+    Parameters
+    ----------
+    region : int
+        number of the glacier region (13, 14 or 15)
+    iters : int
+        Number of iterations associated with the Markov Chain
+    burn : list of ints
+        List of burn in values to plot for Gelman-Rubin stats
+
+    Returns
+    -------
+    .csv files
+        Saves tables to csv file.
+
+    '''
+
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+
+    # find all netcdf files (representing glaciers)
+    if region == 'all':
+        regions = ['13', '14', '15']
+        filelist = []
+        for reg in regions:
+            filelist.extend(glob.glob(mcmc_output_netcdf_fp + str(reg) + '*.nc'))
+    else:
+        filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
+
+    # for testing
+    #filelist = filelist[3:6]
+
+    for vn in variables:
+
+        # create lists of each value
+        glac_no = []
+        effective_n_list = []
+        gelman_rubin_list = []
+        mc_error = []
+
+
+        # iterate through each glacier
+        for netcdf in filelist:
+            print(netcdf)
+
+            try:
+                # open dataset
+                ds = xr.open_dataset(netcdf)
+
+                # calculate metrics
+                en = [effective_n(ds, vn=vn, iters=i, burn=burn) for i in iters]
+                mc = [MC_error(ds, vn=vn, iters=i, burn=burn)[0] for i in iters]
+                if len(ds.chain) > 1:
+                    gr = [gelman_rubin(ds, vn=vn, iters=i, burn=burn) for i in iters]
+
+                # find values for this glacier and append to lists
+                glac_no.append(netcdf[-11:-3])
+                effective_n_list.append(en)
+                # test if multiple chains exist
+                if len(ds.chain) > 1:
+                    gelman_rubin_list.append(gr)
+
+                # divide MC Error by the mean values
+                mean = abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values))
+                print(vn)
+                print(mean)
+                print(mc)
+                mc /= mean
+                print(mc)
+                mc *= 100.0
+                print(mc)
+                mc_error.append(mc)
+
+                ds.close()
+
+            except:
+                print('Error, glacier: ', netcdf)
+                pass
+
+        # do averaging operations
+        effective_n_list_mean = np.mean(effective_n_list, axis=0)
+        gelman_rubin_list_mean = np.mean(gelman_rubin_list, axis=0)
+        mc_error_mean = np.mean(mc_error, axis=0)
+        effective_n_list_std = np.std(effective_n_list, axis=0)
+        gelman_rubin_list_std = np.std(gelman_rubin_list, axis=0)
+        mc_error_std = np.std(mc_error, axis=0)
+
+        # create dataframe
+        data = {'Iter': iters,
+                'Effective N mean' : effective_n_list_mean,
+                'MC Error mean' : mc_error_mean,
+                'Effective N std' : effective_n_list_std,
+                'MC Error std' : mc_error_std}
+        if len(gelman_rubin_list) > 0:
+            data['Gelman-Rubin mean'] = gelman_rubin_list_mean
+            data['Gelman-Rubin std'] = gelman_rubin_list_std
+        df = pd.DataFrame(data)
+        df.set_index('Iter', inplace=True)
+
+        # save csv
+        df.to_csv(mcmc_output_csv_fp + 'assessment_plot2_' + str(region) + 'region_' +
+                  str(burn) + 'burn_' + str(vn) + '.csv')
 
 
 def plot_histograms(iters, burn, region=15, dfs=None):
@@ -1677,9 +1901,13 @@ for n, glac_str_noreg in enumerate(rgi_glac_number[0:4]):
     #        filename = mcmc_output_tables_fp + glacier_str + '.txt')
 '''
 # histogram assessments
-for iters in [15000]:
-    for region in ['all']:
-        write_table(region=region, iters=iters, burn=0)
+iterations = np.arange(1000, 31000, 3000)
+iterations = np.append(iterations, 30000)
+#write_table2(iters=iterations, region='all', burn=0)
+plot_mc_results3(iters=iterations, region='all', burn=0)
+#for iters in iterations:
+#    for region in ['all']:
+#        write_table(region=region, iters=iters, burn=0)
         #plot_histograms(region=region, iters=iters, burn=0)
         #plot_histograms_2(region=region, iters=iters, burn=0)
         #compare_priors(mcmc_data_fp, region=region, iters=iters, burn=0)
