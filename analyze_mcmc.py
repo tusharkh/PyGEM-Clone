@@ -992,7 +992,7 @@ def plot_mc_results2(netcdf_fn, glacier_cal_data, burns=[0,1000,3000,5000],
                 str(c_len) + 'iter' + '.png', bbox_inches='tight')
 
 
-def plot_mc_results3(iters, region='all', burn=0):
+def plot_mc_results3(iters, region='all', burn=0, mean=False):
     """
     Plot gelman-rubin statistic, effective_n (autocorrelation with lag
     100) and markov chain error plots.
@@ -1027,6 +1027,44 @@ def plot_mc_results3(iters, region='all', burn=0):
                          'Effective N': 'Effective Sample Size'}
     metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
 
+
+    if mean:
+        # find mean values
+        # find all netcdf files (representing glaciers)
+        if region == 'all':
+            regions = ['13', '14', '15']
+            filelist = []
+            for reg in regions:
+                filelist.extend(glob.glob(mcmc_output_netcdf_fp + str(reg) + '*.nc'))
+        else:
+            filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
+
+        mean_dict = {}
+
+        for vn in variables:
+            mean_dict[vn] = []
+
+        for netcdf in filelist:
+
+            print(netcdf)
+
+            try:
+                # open dataset
+                ds = xr.open_dataset(netcdf)
+
+                for vn in variables:
+                    mean_dict[vn].append(abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values)))
+
+            except:
+                print('Error: ', netcdf)
+                pass
+
+        # calculate total mean
+        for vn in variables:
+            mean_dict[vn] = np.mean(mean_dict[vn])
+
+
+
     # hard code font sizes
     ticks=10
     suptitle=14
@@ -1060,25 +1098,32 @@ def plot_mc_results3(iters, region='all', burn=0):
     # create subplot for each variable
     for v_count, vn in enumerate(variables):
 
-        df = pd.read_csv(mcmc_output_csv_fp + 'assessment_plot_' +
-                         str(region) + 'region_' + str(burn) +
-                         'burn_' + str(vn) + '.csv')
+        df_dict = {}
+        df_dict['Effective N'] = pd.read_csv(mcmc_output_csv_fp + vn + '_effective_n_df.csv')
+        df_dict['MC Error'] = pd.read_csv(mcmc_output_csv_fp + vn + '_mc_error_df.csv')
+        df_dict['Gelman-Rubin'] = pd.read_csv(mcmc_output_csv_fp + vn + '_gelman_rubin_df.csv')
+
 
         #create subplot for each metric
         for m_count, metric in enumerate(metrics):
 
-            x = df['Iter']
-            mean = df[metric + ' mean']
-            std = df[metric + ' std']
+            df = df_dict[metric].drop('Unnamed: 0', 1)
+            x = df.columns
+            median = df.median().values
+            u_quantile = df.quantile(q=0.95).values
+            l_quantile = df.quantile(q=0.05).values
+
+            print(median)
+            print(u_quantile)
+            print(l_quantile)
 
             # plot histogram
             ax = plt.subplot(nrows, ncols, m_len*v_count+m_count+1)
 
-            ax.plot(x, mean, alpha=alpha)
+            ax.plot(x, median, alpha=alpha)
 
             #plot error region
-            ax.fill_between(x, mean-(num_stds*std),
-                     mean+(num_stds*std), alpha=s_alpha)
+            ax.fill_between(x, u_quantile, l_quantile, alpha=s_alpha)
 
             # niceties
             if v_count == 0:
@@ -1097,7 +1142,7 @@ def plot_mc_results3(iters, region='all', burn=0):
 
     # Save figure
     plt.savefig(mcmc_output_figures_fp + 'assessment_plot' + str(region) +
-                'region_' + str(burn) + 'burn.png',
+                'region_' + str(burn) + 'burn3.png',
                 bbox_inches='tight')
 
 def write_table(region=15, iters=1000, burn=0):
@@ -1141,7 +1186,7 @@ def write_table(region=15, iters=1000, burn=0):
         filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
 
     # for testing
-    filelist = filelist[10:20]
+    #filelist = filelist[10:20]
 
     for vn in variables:
 
@@ -1198,14 +1243,15 @@ def write_table(region=15, iters=1000, burn=0):
 
         # save csv
         df.to_csv(mcmc_output_csv_fp + 'region' + str(region) + '_' +
-                  str(iters) + 'iterations_' + str(burn) + 'burn_' + str(vn) + '.csv')
+                  str(iters) + 'iterations_' + str(burn) + 'burn_' +
+                  str(vn) + '.csv')
 
         dfs.append(df)
 
     return dfs
 
 
-def write_table2(iters, region='all', burn=0):
+def write_table2(iters, region='all', burn=0, average=False):
     '''
     Writes a csv table that lists mean MCMC assessment values for
     each glacier (represented by a netcdf file) for all glaciers at
@@ -1275,14 +1321,14 @@ def write_table2(iters, region='all', burn=0):
                     gelman_rubin_list.append(gr)
 
                 # divide MC Error by the mean values
-                mean = abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values))
-                print(vn)
-                print(mean)
-                print(mc)
-                mc /= mean
-                print(mc)
-                mc *= 100.0
-                print(mc)
+                #mean = abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values))
+                #print(vn)
+                #print(mean)
+                #print(mc)
+                #mc /= mean
+                #print(mc)
+                #mc *= 100.0
+                #print(mc)
                 mc_error.append(mc)
 
                 ds.close()
@@ -1291,29 +1337,111 @@ def write_table2(iters, region='all', burn=0):
                 print('Error, glacier: ', netcdf)
                 pass
 
-        # do averaging operations
-        effective_n_list_mean = np.mean(effective_n_list, axis=0)
-        gelman_rubin_list_mean = np.mean(gelman_rubin_list, axis=0)
-        mc_error_mean = np.mean(mc_error, axis=0)
-        effective_n_list_std = np.std(effective_n_list, axis=0)
-        gelman_rubin_list_std = np.std(gelman_rubin_list, axis=0)
-        mc_error_std = np.std(mc_error, axis=0)
 
-        # create dataframe
-        data = {'Iter': iters,
-                'Effective N mean' : effective_n_list_mean,
-                'MC Error mean' : mc_error_mean,
-                'Effective N std' : effective_n_list_std,
-                'MC Error std' : mc_error_std}
-        if len(gelman_rubin_list) > 0:
-            data['Gelman-Rubin mean'] = gelman_rubin_list_mean
-            data['Gelman-Rubin std'] = gelman_rubin_list_std
-        df = pd.DataFrame(data)
-        df.set_index('Iter', inplace=True)
+        effective_n_df = pd.DataFrame(effective_n_list, index=glac_no, columns=iters)
+        mc_error_df = pd.DataFrame(mc_error, index=glac_no, columns=iters)
+        gelman_rubin_df = pd.DataFrame(gelman_rubin_list, index=glac_no, columns=iters)
 
-        # save csv
-        df.to_csv(mcmc_output_csv_fp + 'assessment_plot2_' + str(region) + 'region_' +
-                  str(burn) + 'burn_' + str(vn) + '.csv')
+        effective_n_df.to_csv(mcmc_output_csv_fp + vn + '_effective_n_df.csv')
+        mc_error_df.to_csv(mcmc_output_csv_fp + vn + '_mc_error_df.csv')
+        gelman_rubin_df.to_csv(mcmc_output_csv_fp + vn + '_gelman_rubin_df.csv')
+
+        if average:
+            # do averaging operations
+            effective_n_list_mean = np.mean(effective_n_list, axis=0)
+            gelman_rubin_list_mean = np.mean(gelman_rubin_list, axis=0)
+            mc_error_mean = np.mean(mc_error, axis=0)
+            effective_n_list_std = np.std(effective_n_list, axis=0)
+            gelman_rubin_list_std = np.std(gelman_rubin_list, axis=0)
+            mc_error_std = np.std(mc_error, axis=0)
+
+            # create dataframe
+            data = {'Iter': iters,
+                    'Effective N mean' : effective_n_list_mean,
+                    'MC Error mean' : mc_error_mean,
+                    'Effective N std' : effective_n_list_std,
+                    'MC Error std' : mc_error_std}
+            if len(gelman_rubin_list) > 0:
+                data['Gelman-Rubin mean'] = gelman_rubin_list_mean
+                data['Gelman-Rubin std'] = gelman_rubin_list_std
+            df = pd.DataFrame(data)
+            df.set_index('Iter', inplace=True)
+
+            # save csv
+            df.to_csv(mcmc_output_csv_fp + 'assessment_plot2_' + str(region) + 'region_' +
+                      str(burn) + 'burn_' + str(vn) + '2.csv')
+
+def find_means(iters, region='all', burn=0, average=False):
+    '''
+    Writes a csv table that lists mean MCMC assessment values for
+    each glacier (represented by a netcdf file) for all glaciers at
+    different chain lengths.
+
+    Writes out the values of effective_n (autocorrelation with
+    lag 100), Gelman-Rubin Statistic, MC_error.
+
+    Parameters
+    ----------
+    region : int
+        number of the glacier region (13, 14 or 15)
+    iters : int
+        Number of iterations associated with the Markov Chain
+    burn : list of ints
+        List of burn in values to plot for Gelman-Rubin stats
+
+    Returns
+    -------
+    .csv files
+        Saves tables to csv file.
+
+    '''
+
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+
+    # find all netcdf files (representing glaciers)
+    if region == 'all':
+        regions = ['13', '14', '15']
+        filelist = []
+        for reg in regions:
+            filelist.extend(glob.glob(mcmc_output_netcdf_fp + str(reg) + '*.nc'))
+    else:
+        filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
+
+    # for testing
+    #filelist = filelist[3:6]
+
+    data_dict = {}
+    glac_no = []
+
+    for vn in variables:
+        data_dict[vn] = []
+
+    # iterate through each glacier
+    for netcdf in filelist:
+        print(netcdf)
+
+        try:
+            # open dataset
+            ds = xr.open_dataset(netcdf)
+
+            for vn in variables:
+
+                data_dict[vn].append([abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values[0:i])) for i in iters])
+
+            # find values for this glacier and append to lists
+            glac_no.append(netcdf[-11:-3])
+
+            ds.close()
+
+        except:
+            print('Error, glacier: ', netcdf)
+            pass
+
+
+    for vn in variables:
+
+        df = pd.DataFrame(data_dict[vn], index=glac_no, columns=iters)
+        df.to_csv(mcmc_output_csv_fp + vn + '_mean.csv')
 
 
 def plot_histograms(iters, burn, region=15, dfs=None):
@@ -1404,7 +1532,7 @@ def plot_histograms(iters, burn, region=15, dfs=None):
                     'iterations_' + str(burn) + 'burn_' + str(metric.replace(' ','_')) + '.png')
 
 
-def plot_histograms_2(iters, burn, region=15, dfs=None):
+def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
     '''
     Plots histograms to assess mcmc chains for groups of glaciers.
     Puts them all in one image file.
@@ -1445,16 +1573,21 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
                          'Effective N': 'Effective Sample Size'}
     metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
 
+    if normalize:
+        suffix2 = ''
+    else:
+        suffix2 = 'without_normalization'
+
     if region in [13, 14, 15]:
         test = pd.read_csv(mcmc_output_csv_fp + 'region' +
                            str(region) + '_' + str(iters) +
                            'iterations_' + str(burn) + 'burn_' +
-                           str('massbal') + '.csv')
+                           str('massbal') + suffix2 + '.csv')
     elif region == 'all':
-        test = pd.read_csv(mcmc_output_csv_fp + 'region' +
-                           str(13) + '_' + str(iters) +
+        test = pd.read_csv(mcmc_output_csv_fp + 'regionall' +
+                           '_' + str(iters) +
                            'iterations_' + str(burn) + 'burn_' +
-                           str('massbal') + '.csv')
+                           str('massbal') + suffix2 + '.csv')
 
     # determine whether Gelman-Rubin has been computed
     if 'Gelman-Rubin' in test.columns:
@@ -1481,10 +1614,10 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
     tdict = {}
 
     if suffix=='_trunc':
-        bdict['MC Error massbal'] = np.arange(0, 2.5, 0.125)
-        bdict['MC Error tempchange'] = np.arange(0, 2.5, 0.125)
-        bdict['MC Error ddfsnow'] = np.arange(0, 2.5, 0.125)
-        bdict['MC Error precfactor'] = np.arange(0, 2.5, 0.125)
+        bdict['MC Error massbal'] = np.arange(0, 4, 0.2)
+        bdict['MC Error tempchange'] = np.arange(0, 8, 0.4)
+        bdict['MC Error ddfsnow'] = np.arange(0, 3, 0.15)
+        bdict['MC Error precfactor'] = np.arange(0, 5, 0.25)
         bdict['Gelman-Rubin massbal'] = np.arange(1, 1.002, 0.0001)
         bdict['Gelman-Rubin precfactor'] = np.arange(1.0, 1.006, 0.0003)
         bdict['Gelman-Rubin tempchange'] = np.arange(1.00, 1.02, 0.001)
@@ -1520,17 +1653,20 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
             vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
                                          str(region) + '_' + str(iters) +
                                          'iterations_' + str(burn) + 'burn_' +
-                                         str(vn) + '.csv')
+                                         str(vn) + suffix2 + '.csv')
     elif region == 'all':
         for vn in variables:
             regions = [13, 14, 15]
             dfs = []
-            for reg in regions:
-                dfs.append(pd.read_csv(mcmc_output_csv_fp + 'region' +
-                                       str(reg) + '_' + str(iters) +
+            #for reg in regions:
+            #    dfs.append(pd.read_csv(mcmc_output_csv_fp + 'region' +
+            #                           str(reg) + '_' + str(iters) +
+            #                           'iterations_' + str(burn) + 'burn_' +
+            #                           str(vn) + 'without_normalization.csv'))
+            vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                       str(region) + '_' + str(iters) +
                                        'iterations_' + str(burn) + 'burn_' +
-                                       str(vn) + '.csv'))
-            vn_df_dict[vn] = pd.concat(dfs)
+                                       str(vn) + suffix2 + '.csv')
 
     # get variables and burn length for dimension
     v_len = len(variables)
@@ -1570,7 +1706,8 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
 
             # find cumulative percentage and plot it
             cum_hist = [hist[0:i].sum() for i in range(len(hist))]
-
+            print(len(bins))
+            print(len(cum_hist))
             # find 5 % point or 95 % point
             if metric=='Effective N':
                 percent = 5
@@ -1580,12 +1717,12 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
             for point in cum_hist:
                 if point < percent:
                     index += 1
-
+            print(index)
             ax2.plot(bins[:-1], cum_hist, color='#ff6600',
                      linewidth=plotline, label='Cumulative %')
             ax2.set_yticks(np.arange(0, 110, 20))
 
-            ax2.plot([bins[index], bins[index]],[cum_hist[index], 0], color='black',
+            ax2.plot([bins[index], bins[index]],[cum_hist[index-1], 0], color='black',
                      linewidth=plotline2)
 
             # set tick sizes
@@ -1615,7 +1752,7 @@ def plot_histograms_2(iters, burn, region=15, dfs=None):
 
     # Save figure
     plt.savefig(mcmc_output_hist_fp + 'region' + str(region) + '_' + str(iters) +
-                'iterations_' + str(burn) + 'burn_' + suffix + '.png',
+                'iterations_' + str(burn) + 'burn_' + suffix2 + '.png',
                 bbox_inches='tight')
 
 
@@ -1904,10 +2041,11 @@ for n, glac_str_noreg in enumerate(rgi_glac_number[0:4]):
 iterations = np.arange(1000, 31000, 3000)
 iterations = np.append(iterations, 30000)
 #write_table2(iters=iterations, region='all', burn=0)
-plot_mc_results3(iters=iterations, region='all', burn=0)
-#for iters in iterations:
+find_means(iters=iterations, region='all', burn=0)
+#plot_mc_results3(iters=iterations, region='all', burn=0)
+#for iters in [15000]:
 #    for region in ['all']:
-#        write_table(region=region, iters=iters, burn=0)
+        #write_table(region=region, iters=iters, burn=0)
         #plot_histograms(region=region, iters=iters, burn=0)
         #plot_histograms_2(region=region, iters=iters, burn=0)
         #compare_priors(mcmc_data_fp, region=region, iters=iters, burn=0)
