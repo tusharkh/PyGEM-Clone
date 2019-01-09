@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from pymc import utils
 from pymc.database import base
 
+#import scipy.stats as stats
 from scipy.stats.kde import gaussian_kde
 from scipy.stats import norm
 from scipy.stats import truncnorm
@@ -22,8 +23,6 @@ from scipy.stats import uniform
 from scipy.stats import linregress
 # Local libraries
 import pygem_input as input
-import pygemfxns_modelsetup as modelsetup
-import class_mbdata
 
 
 #%% ===== SCRIPT SPECIFIC INPUT DATA =====
@@ -38,7 +37,7 @@ acorr_maxlags = 100
 
 # Export option
 #output_filepath = input.main_directory + '/../Output/'
-suffix = '_trunc'
+suffix = '_15000'
 mcmc_data_fp = input.main_directory + '/../MCMC_data/'
 mcmc_prior_fp = mcmc_data_fp + 'prior_comparison/'
 mcmc_output_netcdf_fp = input.main_directory + '/../MCMC_data/netcdf' + suffix + '/'
@@ -992,7 +991,7 @@ def plot_mc_results2(netcdf_fn, glacier_cal_data, burns=[0,1000,3000,5000],
                 str(c_len) + 'iter' + '.png', bbox_inches='tight')
 
 
-def plot_mc_results3(iters, region='all', burn=0, mean=False):
+def assessment_vs_chain_length(iters, region='all', burn=0, mean=False):
     """
     Plot gelman-rubin statistic, effective_n (autocorrelation with lag
     100) and markov chain error plots.
@@ -1026,6 +1025,10 @@ def plot_mc_results3(iters, region='all', burn=0, mean=False):
                          'MC Error': 'Monte Carlo Error',
                          'Effective N': 'Effective Sample Size'}
     metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'[mwea]',
+                     'precfactor':'[-]',
+                     'tempchange':'[degC]',
+                     'ddfsnow':'[mwe $degC^{-1} d^{-1}$]'}
 
 
     if mean:
@@ -1076,14 +1079,22 @@ def plot_mc_results3(iters, region='all', burn=0, mean=False):
     legend=10
     figsize=(6.5, 9)
     dpi=100
-    hspace=0.6
-    wspace=0.6
+    hspace=0.4
+    wspace=0.4
     sup_y = 0.97
     nrows=4
     ncols=3
     num_stds=1
     alpha = 0.7
     s_alpha = 0.5
+    cutoffstyle = '--'
+    cutoffcolor = 'black'
+    cutoffwidth = 1.5
+    num_stds = 2
+    #colors = ['#614684', '#ddc73e', '#ff6135']
+    colors = ['#387ea0', '#fcb200', '#d20048']
+    xmin = 0.025
+    xmax = 0.975
 
     # bins and ticks
     bdict = {}
@@ -1099,51 +1110,92 @@ def plot_mc_results3(iters, region='all', burn=0, mean=False):
     for v_count, vn in enumerate(variables):
 
         df_dict = {}
-        df_dict['Effective N'] = pd.read_csv(mcmc_output_csv_fp + vn + '_effective_n_df.csv')
-        df_dict['MC Error'] = pd.read_csv(mcmc_output_csv_fp + vn + '_mc_error_df.csv')
-        df_dict['Gelman-Rubin'] = pd.read_csv(mcmc_output_csv_fp + vn + '_gelman_rubin_df.csv')
-
+        df_dict['Effective N'] = pd.read_csv(mcmc_output_csv_fp + vn + '_effective_n_df.csv').drop('Unnamed: 0', 1)
+        df_dict['MC Error'] = pd.read_csv(mcmc_output_csv_fp + vn + '_mc_error_df.csv').drop('Unnamed: 0', 1)
+        df_dict['normalized MC Error'] = pd.read_csv(mcmc_output_csv_fp +
+                vn + '_normalized_mc_error_df.csv').drop('Unnamed: 0', 1)
+        df_dict['Gelman-Rubin'] = pd.read_csv(mcmc_output_csv_fp + vn + '_gelman_rubin_df.csv').drop('Unnamed: 0', 1)
 
         #create subplot for each metric
+        k = 0
         for m_count, metric in enumerate(metrics):
 
-            df = df_dict[metric].drop('Unnamed: 0', 1)
-            x = df.columns
-            median = df.median().values
+            if metric == 'MC Error' and (vn == 'precfactor' or vn == 'ddfsnow'):
+                df = df_dict['normalized ' + metric]#.drop('Unnamed: 0', 1)
+            else:
+                df = df_dict[metric]#.drop('Unnamed: 0', 1)
+            x = df.columns.values.astype(int)
             u_quantile = df.quantile(q=0.95).values
             l_quantile = df.quantile(q=0.05).values
-
-            print(median)
-            print(u_quantile)
-            print(l_quantile)
+            mean = df.mean().values
+            median = df.median().values
+            std = df.std().values
 
             # plot histogram
             ax = plt.subplot(nrows, ncols, m_len*v_count+m_count+1)
 
-            ax.plot(x, median, alpha=alpha)
+            ax.plot(x, mean, alpha=alpha, color=colors[k])
 
             #plot error region
-            ax.fill_between(x, u_quantile, l_quantile, alpha=s_alpha)
+            #ax.fill_between(x, mean + (num_stds * std), mean - (num_stds * std), alpha=s_alpha)
+            ax.fill_between(x, u_quantile, l_quantile, alpha=s_alpha, color=colors[k])
 
             # niceties
             if v_count == 0:
                 plt.title(metric_title_dict[metric], fontsize=title, y=titley)
 
+            ylabel = ''
             # axis labels
-            if metric=='MC Error':
-                ylabel = metric
-            else:
-                ylabel = metric + ' value'
+            #if metric == 'MC Error' and (vn == 'tempchange' or vn == 'massbal'):
+            #    ylabel = metric + ' ' + vn_label_dict[vn]
+            #elif metric == 'MC Error':
+            #    ylabel = metric + ' [%]'
+            #else:
+            #    ylabel = metric
 
             if m_count == 0:
-                ax.set_ylabel(vn_title_dict[vn] + '\n\n' + ylabel, fontsize=label, labelpad=0)
-            else:
-                ax.set_ylabel(ylabel, fontsize=label)
+                ax.set_ylabel(vn_title_dict[vn], fontsize=label, labelpad=10)
+            #else:
+                #ax.set_ylabel(ylabel, fontsize=label)
+
+            if metric == 'Effective N':
+                ax.set_ylim(bottom=0, top=1000)
+                ax.axhline(y=100, xmin=xmin, xmax=xmax, color=cutoffcolor, linestyle=cutoffstyle, linewidth=cutoffwidth)
+                #ticks = [item for item in ax.get_yticklabels()]
+                #print(ticks)
+            if metric == 'Gelman-Rubin':
+                ax.set_ylim(bottom=1.0, top=1.12)
+                ax.axhline(y=1.1, xmin=xmin, xmax=xmax, color=cutoffcolor, linestyle=cutoffstyle, linewidth=cutoffwidth)
+            if metric == 'MC Error' and (vn == 'precfactor' or vn == 'ddfsnow'):
+                ax.axhline(y=5, xmin=xmin, xmax=xmax, color=cutoffcolor, linestyle=cutoffstyle, linewidth=cutoffwidth)
+
+            ax.set_xticks(np.arange(0, 31000, 10000))
+
+            majorLocator = MultipleLocator(10000)
+            majorFormatter = FormatStrFormatter('%d/1000')
+            minorLocator = MultipleLocator(2000)
+
+            ax.xaxis.set_major_locator(majorLocator)
+            ax.xaxis.set_minor_locator(minorLocator)
+
+            def format_func(value, tick_number):
+                # find number of multiples of pi/2
+                N = int(value)
+                return str(int(N/1000))
+
+
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(format_func))
+            #ax.xaxis.set_major_formatter(majorFormatter)
+
+            if v_count==3:
+                ax.set_xlabel('Steps [$10^3$]')
+
+            k += 1
 
     # Save figure
-    plt.savefig(mcmc_output_figures_fp + 'assessment_plot' + str(region) +
-                'region_' + str(burn) + 'burn3.png',
+    plt.savefig(mcmc_output_figures_fp + 'assessment_vs_chain_length.png',
                 bbox_inches='tight')
+
 
 def write_table(region=15, iters=1000, burn=0):
     '''
@@ -1186,7 +1238,7 @@ def write_table(region=15, iters=1000, burn=0):
         filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
 
     # for testing
-    #filelist = filelist[10:20]
+    #filelist = filelist[10:13]
 
     for vn in variables:
 
@@ -1195,7 +1247,7 @@ def write_table(region=15, iters=1000, burn=0):
         effective_n_list = []
         gelman_rubin_list = []
         mc_error = []
-
+        mean_list = []
 
         # iterate through each glacier
         for netcdf in filelist:
@@ -1212,10 +1264,10 @@ def write_table(region=15, iters=1000, burn=0):
 
                 # divide MC Error by the mean values
                 mean = abs(np.mean(ds['mp_value'].sel(chain=0, mp=vn).values))
-                mc /= mean
-                mc *= 100.0
+                #mc /= mean
+                #mc *= 100.0
                 mc_error.append(mc)
-
+                mean_list.append(mean)
                 if len(ds.chain) > 1:
                     gr = gelman_rubin(ds, vn=vn, iters=iters, burn=burn)
 
@@ -1235,7 +1287,8 @@ def write_table(region=15, iters=1000, burn=0):
         # create dataframe
         data = {'Glacier': glac_no,
                 'Effective N' : effective_n_list,
-                'MC Error' : mc_error}
+                'MC Error' : mc_error,
+                'Mean': mean_list}
         if len(gelman_rubin_list) > 0:
             data['Gelman-Rubin'] = gelman_rubin_list
         df = pd.DataFrame(data)
@@ -1244,7 +1297,7 @@ def write_table(region=15, iters=1000, burn=0):
         # save csv
         df.to_csv(mcmc_output_csv_fp + 'region' + str(region) + '_' +
                   str(iters) + 'iterations_' + str(burn) + 'burn_' +
-                  str(vn) + '.csv')
+                  str(vn) + '2.csv')
 
         dfs.append(df)
 
@@ -1370,6 +1423,7 @@ def write_table2(iters, region='all', burn=0, average=False):
             # save csv
             df.to_csv(mcmc_output_csv_fp + 'assessment_plot2_' + str(region) + 'region_' +
                       str(burn) + 'burn_' + str(vn) + '2.csv')
+
 
 def find_means(iters, region='all', burn=0, average=False):
     '''
@@ -1532,7 +1586,7 @@ def plot_histograms(iters, burn, region=15, dfs=None):
                     'iterations_' + str(burn) + 'burn_' + str(metric.replace(' ','_')) + '.png')
 
 
-def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
+def plot_histograms_2(iters, burn, region=15, dfs=None):
     '''
     Plots histograms to assess mcmc chains for groups of glaciers.
     Puts them all in one image file.
@@ -1572,22 +1626,26 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
                          'MC Error': 'Monte Carlo Error',
                          'Effective N': 'Effective Sample Size'}
     metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'[mwea]',
+                     'precfactor':'[-]',
+                     'tempchange':'[degC]',
+                     'ddfsnow':'[mwe $degC^{-1} d^{-1}$]'}
 
-    if normalize:
-        suffix2 = ''
-    else:
-        suffix2 = 'without_normalization'
+    #if normalize:
+    #    suffix2 = ''
+    #else:
+    #    suffix2 = 'without_normalization'
 
     if region in [13, 14, 15]:
         test = pd.read_csv(mcmc_output_csv_fp + 'region' +
                            str(region) + '_' + str(iters) +
                            'iterations_' + str(burn) + 'burn_' +
-                           str('massbal') + suffix2 + '.csv')
+                           str('massbal') + '.csv')
     elif region == 'all':
         test = pd.read_csv(mcmc_output_csv_fp + 'regionall' +
                            '_' + str(iters) +
                            'iterations_' + str(burn) + 'burn_' +
-                           str('massbal') + suffix2 + '.csv')
+                           str('massbal') + '.csv')
 
     # determine whether Gelman-Rubin has been computed
     if 'Gelman-Rubin' in test.columns:
@@ -1614,13 +1672,15 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
     tdict = {}
 
     if suffix=='_trunc':
-        bdict['MC Error massbal'] = np.arange(0, 4, 0.2)
-        bdict['MC Error tempchange'] = np.arange(0, 8, 0.4)
+        #bdict['MC Error massbal'] = np.arange(0, 4, 0.2)
+        bdict['MC Error massbal'] = np.arange(0, 0.012, 0.0006)
+        #bdict['MC Error tempchange'] = np.arange(0, 8, 0.4)
+        bdict['MC Error tempchange'] = np.arange(0, 0.25, 0.0125)
         bdict['MC Error ddfsnow'] = np.arange(0, 3, 0.15)
         bdict['MC Error precfactor'] = np.arange(0, 5, 0.25)
         bdict['Gelman-Rubin massbal'] = np.arange(1, 1.002, 0.0001)
         bdict['Gelman-Rubin precfactor'] = np.arange(1.0, 1.006, 0.0003)
-        bdict['Gelman-Rubin tempchange'] = np.arange(1.00, 1.02, 0.001)
+        bdict['Gelman-Rubin tempchange'] = np.arange(1.00, 1.016, 0.0008)
         bdict['Gelman-Rubin ddfsnow'] = np.arange(1.0, 1.006, 0.0003)
         bdict['Effective N massbal'] = 20
         bdict['Effective N ddfsnow'] = np.arange(0, 2500, 125)
@@ -1666,7 +1726,11 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
             vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
                                        str(region) + '_' + str(iters) +
                                        'iterations_' + str(burn) + 'burn_' +
-                                       str(vn) + suffix2 + '.csv')
+                                       str(vn) + '.csv')
+            vn_df_dict[vn + '_unnormalized'] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                       str(region) + '_' + str(iters) +
+                                       'iterations_' + str(burn) + 'burn_' +
+                                       str(vn) + 'without_normalization.csv')
 
     # get variables and burn length for dimension
     v_len = len(variables)
@@ -1687,7 +1751,10 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
         # create subplot for each variable
         for v_count, vn in enumerate(variables):
 
-            df = vn_df_dict[vn]
+            if metric == 'MC Error' and (vn == 'massbal' or vn == 'tempchange'):
+                df = vn_df_dict[vn + '_unnormalized']
+            else:
+                df = vn_df_dict[vn]
 
             # plot histogram
             ax = plt.subplot(v_len, m_len, m_len*v_count+m_count+1)
@@ -1706,8 +1773,8 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
 
             # find cumulative percentage and plot it
             cum_hist = [hist[0:i].sum() for i in range(len(hist))]
-            print(len(bins))
-            print(len(cum_hist))
+            #print(len(bins))
+            #print(len(cum_hist))
             # find 5 % point or 95 % point
             if metric=='Effective N':
                 percent = 5
@@ -1717,7 +1784,7 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
             for point in cum_hist:
                 if point < percent:
                     index += 1
-            print(index)
+            #print(index)
             ax2.plot(bins[:-1], cum_hist, color='#ff6600',
                      linewidth=plotline, label='Cumulative %')
             ax2.set_yticks(np.arange(0, 110, 20))
@@ -1741,10 +1808,14 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
                 ax.set_ylabel(vn_title_dict[vn] + '\n\n% of Glaciers', fontsize=label, labelpad=0)
             if m_count == 2:
                 ax2.set_ylabel('Cumulative %', fontsize=label, rotation = 270, labelpad=10)
-            if metric=='MC Error':
+            if metric == 'MC Error' and (vn == 'massbal' or vn == 'tempchange'):
+                ax.set_xlabel(metric + ' ' + vn_label_dict[vn], fontsize=label)
+            elif metric=='MC Error':
                 ax.set_xlabel(metric + ' (% of mean)', fontsize=label)
+            elif metric == 'Effective N':
+                ax.set_xlabel('Effective Sample Size', fontsize=label)
             else:
-                ax.set_xlabel(metric + ' value', fontsize=label)
+                ax.set_xlabel(metric, fontsize=label)
 
             # legend
             #if v_count==3 and m_count==2:
@@ -1752,7 +1823,448 @@ def plot_histograms_2(iters, burn, region=15, dfs=None, normalize=True):
 
     # Save figure
     plt.savefig(mcmc_output_hist_fp + 'region' + str(region) + '_' + str(iters) +
-                'iterations_' + str(burn) + 'burn_' + suffix2 + '.png',
+                'iterations_' + str(burn) + 'burn_mixed.png',
+                bbox_inches='tight')
+
+
+def plot_histograms_15000(iters, burn, region=15, dfs=None):
+    '''
+    Plots histograms to assess mcmc chains for groups of glaciers.
+    Puts them all in one image file.
+
+    Plots histograms of effective_n, gelman-rubin and mc error for
+    the given number of iterations and burn-in and the given variable.
+
+    For this function to work, the appropriate csv file must have already
+    been created.
+
+    Parameters
+    ----------
+    iters : int
+        Number of iterations associated with the Markov Chain
+    burn : list of ints
+        List of burn in values to plot for Gelman-Rubin stats
+    region : int
+        RGI region number  or 'all'
+    dfs : list of pandas.DataFrame
+        list of dataframes containing glacier information to be plotted. If
+        none, looks for appropriate csv file
+
+    Returns
+    -------
+    .png files
+        Saves images to 3 png files.
+
+    '''
+
+    # hard code some variable names (dirty solution)
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+    vn_title_dict = {'massbal':'Mass Balance',
+                     'precfactor':'Precipitation Factor',
+                     'tempchange':'Temperature Bias',
+                     'ddfsnow':'DDF Snow'}
+    metric_title_dict = {'Gelman-Rubin':'Gelman-Rubin Statistic',
+                         'MC Error': 'Monte Carlo Error',
+                         'Effective N': 'Effective Sample Size'}
+    metrics = ['MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'[mwea]',
+                     'precfactor':'[-]',
+                     'tempchange':'[$^{o}$C]',
+                     'ddfsnow':'[mwe $degC^{-1} d^{-1}$]'}
+
+    # hard code font sizes
+    ticks=10
+    suptitle=14
+    title=11
+    titley = 1.05
+    label=10
+    plotline=1.25
+    plotline2=1.25
+    legend=10
+    figsize=(6.5, 9)
+    dpi=100
+    hspace=0.6
+    wspace=0.4
+    colors = ['#387ea0', '#d20048', '#fcb200']
+    alpha = 0.7
+
+    # bins and ticks
+    bdict = {}
+    tdict = {}
+    major = {}
+    minor = {}
+
+    bdict['MC Error massbal'] = np.arange(0, 0.012, 0.0006)
+    bdict['MC Error tempchange'] = np.arange(0, 0.25, 0.0125)
+    bdict['MC Error ddfsnow'] = np.arange(0, 4.5, 0.225)
+    bdict['MC Error precfactor'] = np.arange(0, 8, 0.4)
+    bdict['Effective N massbal'] = np.arange(0, 8000, 400)
+    bdict['Effective N ddfsnow'] = np.arange(0, 3500, 175)
+    bdict['Effective N tempchange'] = np.arange(0, 2000, 100)
+    bdict['Effective N precfactor'] = np.arange(0, 2500, 125)
+    tdict['MC Error'] = np.arange(0, 21, 4)
+    tdict['Effective N'] = np.arange(0, 21, 4)
+    major['MC Error massbal'] = MultipleLocator(0.005)
+    major['MC Error tempchange'] = MultipleLocator(0.1)
+    major['MC Error ddfsnow'] = MultipleLocator(1)
+    major['MC Error precfactor'] = MultipleLocator(2)
+    major['Effective N massbal'] = MultipleLocator(2000)
+    major['Effective N ddfsnow'] = MultipleLocator(1000)
+    major['Effective N tempchange'] = MultipleLocator(500)
+    major['Effective N precfactor'] = MultipleLocator(1000)
+    minor['MC Error massbal'] = MultipleLocator(0.001)
+    minor['MC Error tempchange'] = MultipleLocator(0.02)
+    minor['MC Error ddfsnow'] = MultipleLocator(0.2)
+    minor['MC Error precfactor'] = MultipleLocator(0.4)
+    minor['Effective N massbal'] = MultipleLocator(400)
+    minor['Effective N ddfsnow'] = MultipleLocator(200)
+    minor['Effective N tempchange'] = MultipleLocator(100)
+    minor['Effective N precfactor'] = MultipleLocator(200)
+
+    # read csv files
+    vn_df_dict = {}
+    if region in [13, 14, 15]:
+        for vn in variables:
+            vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                         str(region) + '_' + str(iters) +
+                                         'iterations_' + str(burn) + 'burn_' +
+                                         str(vn) + suffix2 + '.csv')
+    elif region == 'all':
+        for vn in variables:
+            regions = [13, 14, 15]
+            dfs = []
+            for reg in regions:
+                dfs.append(pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                       str(reg) + '_' + str(iters) +
+                                       'iterations_' + str(burn) + 'burn_' +
+                                       str(vn) + '2.csv'))
+            vn_df_dict[vn] = pd.concat(dfs)
+
+    # get variables and burn length for dimension
+    v_len = len(variables)
+    m_len = len(metrics)
+
+    # create figure
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    #create subplot for each metric
+    for m_count, metric in enumerate(metrics):
+
+        # create subplot for each variable
+        for v_count, vn in enumerate(variables):
+
+            df = vn_df_dict[vn]
+
+            # plot histogram
+            ax = plt.subplot(v_len, m_len, m_len*v_count+m_count+1)
+            ax2 = ax.twinx()
+
+            # compute histogram and change to percentage of glaciers
+            #print(suffix, metric, vn)
+            if metric == 'MC Error' and (vn == 'ddfsnow' or vn == 'precfactor'):
+                a = df[metric] * 100.0 / df['Mean']
+            else:
+                a = df[metric]
+
+            hist, bins = np.histogram(a=a, bins=bdict[metric + ' ' + vn])
+            hist = hist * 100.0 / hist.sum()
+            #print(sum(hist))
+
+            # plot histogram
+            ax.bar(x=bins[1:], height=hist, width=(bins[1]-bins[0]), align='center',
+                   alpha=alpha, edgecolor='black', color=colors[m_count])
+
+            # create uniform bins based on metric
+            ax.set_yticks(tdict[metric])
+
+            # find cumulative percentage and plot it
+            cum_hist = [hist[0:i].sum() for i in range(len(hist))]
+            #print(len(bins))
+            #print(len(cum_hist))
+            # find 5 % point or 95 % point
+            if metric=='Effective N':
+                percent = 5
+            else:
+                percent = 95
+            index = 0
+            for point in cum_hist:
+                if point < percent:
+                    index += 1
+            #print(index)
+            ax2.plot(bins[:-1], cum_hist, color='black',
+                     linewidth=plotline, label='Cumulative %')
+            ax2.set_yticks(np.arange(0, 110, 20))
+
+            ax2.axvline(bins[index], color='black',
+                     linewidth=plotline2, linestyle='--')
+
+            # set tick sizes
+            ax.tick_params(labelsize=ticks)
+            ax2.tick_params(labelsize=ticks)
+
+            ax2.set_ylim(0, 100)
+            #ax.set_xlim(bins[0], bins[-1])
+
+            # niceties
+            if v_count == 0:
+                plt.title(metric_title_dict[metric], fontsize=label, y=titley)
+
+            # axis labels
+            if m_count == 0:
+                ax.set_ylabel(vn_title_dict[vn] + '\n\n% of Glaciers', fontsize=label, labelpad=3)
+            if m_count == 1:
+                ax2.set_ylabel('Cumulative %', fontsize=label, rotation = 270, labelpad=10)
+            if metric == 'MC Error' and (vn == 'massbal' or vn == 'tempchange'):
+                ax.set_xlabel(metric + ' ' + vn_label_dict[vn], fontsize=label)
+            elif metric=='MC Error':
+                ax.set_xlabel(metric + ' (% of mean)', fontsize=label)
+            elif metric == 'Effective N':
+                ax.set_xlabel('Effective Sample Size', fontsize=label)
+            else:
+                ax.set_xlabel(metric, fontsize=label)
+
+            ax.xaxis.set_major_locator(major[metric + ' ' + vn])
+            ax.xaxis.set_minor_locator(minor[metric + ' ' + vn])
+
+            # legend
+            #if v_count==3 and m_count==2:
+                #ax2.legend(loc='best', fontsize=legend)
+
+            if m_count == 0:
+                ax2.yaxis.set_major_locator(plt.NullLocator())
+            if m_count == 1:
+                ax.yaxis.set_major_locator(plt.NullLocator())
+
+    # Save figure
+    plt.savefig(mcmc_output_hist_fp + 'histrogram_mixed.png',
+                bbox_inches='tight')
+
+
+def plot_histograms_trunc(iters, burn, region=15, dfs=None):
+    '''
+    Plots histograms to assess mcmc chains for groups of glaciers.
+    Puts them all in one image file.
+
+    Plots histograms of effective_n, gelman-rubin and mc error for
+    the given number of iterations and burn-in and the given variable.
+
+    For this function to work, the appropriate csv file must have already
+    been created.
+
+    Parameters
+    ----------
+    iters : int
+        Number of iterations associated with the Markov Chain
+    burn : list of ints
+        List of burn in values to plot for Gelman-Rubin stats
+    region : int
+        RGI region number  or 'all'
+    dfs : list of pandas.DataFrame
+        list of dataframes containing glacier information to be plotted. If
+        none, looks for appropriate csv file
+
+    Returns
+    -------
+    .png files
+        Saves images to 3 png files.
+
+    '''
+
+    # hard code some variable names (dirty solution)
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+    vn_title_dict = {'massbal':'Mass Balance',
+                     'precfactor':'Precipitation Factor',
+                     'tempchange':'Temperature Bias',
+                     'ddfsnow':'DDF Snow'}
+    metric_title_dict = {'Gelman-Rubin':'Gelman-Rubin Statistic',
+                         'MC Error': 'Monte Carlo Error',
+                         'Effective N': 'Effective Sample Size'}
+    metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'[mwea]',
+                     'precfactor':'[-]',
+                     'tempchange':'[$^{o}$C]',
+                     'ddfsnow':'[mwe $degC^{-1} d^{-1}$]'}
+
+    # hard code font sizes
+    ticks=10
+    suptitle=14
+    title=11
+    titley = 1.05
+    label=10
+    plotline=1.25
+    plotline2=1.25
+    legend=10
+    figsize=(6.5, 9)
+    dpi=100
+    hspace=0.6
+    wspace=0.3
+    colors = ['#387ea0', '#d20048', '#fcb200']
+    alpha = 0.7
+
+    # bins and ticks
+    bdict = {}
+    tdict = {}
+    major = {}
+    minor = {}
+
+    bdict['MC Error massbal'] = np.arange(0, 0.012, 0.0006)
+    bdict['MC Error tempchange'] = np.arange(0, 0.25, 0.0125)
+    bdict['MC Error ddfsnow'] = np.arange(0, 4.5, 0.225)
+    bdict['MC Error precfactor'] = np.arange(0, 8, 0.4)
+    bdict['Effective N massbal'] = np.arange(0, 8000, 400)
+    bdict['Effective N ddfsnow'] = np.arange(0, 3500, 175)
+    bdict['Effective N tempchange'] = np.arange(0, 2000, 100)
+    bdict['Effective N precfactor'] = np.arange(0, 2400, 120)
+    bdict['Gelman-Rubin massbal'] = np.arange(1, 1.003, 0.00015)
+    bdict['Gelman-Rubin precfactor'] = np.arange(1.0, 1.018, 0.0009)
+    bdict['Gelman-Rubin tempchange'] = np.arange(1.00, 1.02, 0.001)
+    bdict['Gelman-Rubin ddfsnow'] = np.arange(1.0, 1.01, 0.0005)
+    tdict['MC Error'] = np.arange(0, 31, 5)
+    tdict['Effective N'] = np.arange(0, 31, 5)
+    tdict['Gelman-Rubin'] = np.arange(0, 31, 5)
+    major['MC Error massbal'] = MultipleLocator(0.01)
+    major['MC Error tempchange'] = MultipleLocator(0.1)
+    major['MC Error ddfsnow'] = MultipleLocator(1)
+    major['MC Error precfactor'] = MultipleLocator(2)
+    major['Gelman-Rubin massbal'] = MultipleLocator(0.002)
+    major['Gelman-Rubin tempchange'] = MultipleLocator(0.02)
+    major['Gelman-Rubin ddfsnow'] = MultipleLocator(0.005)
+    major['Gelman-Rubin precfactor'] = MultipleLocator(0.01)
+    major['Effective N massbal'] = MultipleLocator(4000)
+    major['Effective N ddfsnow'] = MultipleLocator(2000)
+    major['Effective N tempchange'] = MultipleLocator(1000)
+    major['Effective N precfactor'] = MultipleLocator(2000)
+    minor['Gelman-Rubin massbal'] = MultipleLocator(0.0004)
+    minor['Gelman-Rubin tempchange'] = MultipleLocator(0.004)
+    minor['Gelman-Rubin ddfsnow'] = MultipleLocator(0.001)
+    minor['Gelman-Rubin precfactor'] = MultipleLocator(0.002)
+    minor['MC Error massbal'] = MultipleLocator(0.002)
+    minor['MC Error tempchange'] = MultipleLocator(0.02)
+    minor['MC Error ddfsnow'] = MultipleLocator(0.2)
+    minor['MC Error precfactor'] = MultipleLocator(1)
+    minor['Effective N massbal'] = MultipleLocator(800)
+    minor['Effective N ddfsnow'] = MultipleLocator(400)
+    minor['Effective N tempchange'] = MultipleLocator(200)
+    minor['Effective N precfactor'] = MultipleLocator(400)
+
+    # read csv files
+    vn_df_dict = {}
+    if region in [13, 14, 15]:
+        for vn in variables:
+            vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                         str(region) + '_' + str(iters) +
+                                         'iterations_' + str(burn) + 'burn_' +
+                                         str(vn) + suffix2 + '.csv')
+
+    elif region == 'all':
+        for vn in variables:
+            regions = [13, 14, 15]
+            vn_df_dict[vn] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                       str(region) + '_' + str(iters) +
+                                       'iterations_' + str(burn) + 'burn_' +
+                                       str(vn) + '.csv')
+            vn_df_dict[vn + '_unnormalized'] = pd.read_csv(mcmc_output_csv_fp + 'region' +
+                                       str(region) + '_' + str(iters) +
+                                       'iterations_' + str(burn) + 'burn_' +
+                                       str(vn) + 'without_normalization.csv')
+
+    # get variables and burn length for dimension
+    v_len = len(variables)
+    m_len = len(metrics)
+
+    # create figure
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    #create subplot for each metric
+    for m_count, metric in enumerate(metrics):
+
+        # create subplot for each variable
+        for v_count, vn in enumerate(variables):
+
+            df = vn_df_dict[vn]
+
+            # plot histogram
+            ax = plt.subplot(v_len, m_len, m_len*v_count+m_count+1)
+            ax2 = ax.twinx()
+
+            # compute histogram and change to percentage of glaciers
+            if metric == 'MC Error' and (vn == 'massbal' or vn == 'tempchange'):
+                df = vn_df_dict[vn + '_unnormalized']
+            else:
+                df = vn_df_dict[vn]
+
+            a = df[metric]
+
+            hist, bins = np.histogram(a=a, bins=bdict[metric + ' ' + vn])
+            hist = hist * 100.0 / hist.sum()
+
+            # plot histogram
+            ax.bar(x=bins[1:], height=hist, width=(bins[1]-bins[0]), align='center',
+                   alpha=alpha, edgecolor='black', color=colors[m_count])
+
+            # create uniform bins based on metric
+            ax.set_yticks(tdict[metric])
+
+            # find cumulative percentage and plot it
+            cum_hist = [hist[0:i].sum() for i in range(len(hist))]
+
+            # find 5 % point or 95 % point
+            if metric=='Effective N':
+                percent = 5
+            else:
+                percent = 95
+            index = 0
+            for point in cum_hist:
+                if point < percent:
+                    index += 1
+            #print(index)
+            ax2.plot(bins[:-1], cum_hist, color='black',
+                     linewidth=plotline, label='Cumulative %')
+            ax2.set_yticks(np.arange(0, 110, 20))
+
+            ax2.axvline(bins[index], color='black',
+                     linewidth=plotline2, linestyle='--')
+
+            # set tick sizes
+            ax.tick_params(labelsize=ticks)
+            ax2.tick_params(labelsize=ticks)
+
+            ax2.set_ylim(0, 100)
+
+            # niceties
+            if v_count == 0:
+                plt.title(metric_title_dict[metric], fontsize=label, y=titley)
+
+            # axis labels
+            if m_count == 0:
+                ax.set_ylabel(vn_title_dict[vn] + '\n\n% of Glaciers', fontsize=label, labelpad=3)
+            if m_count == 2:
+                ax2.set_ylabel('Cumulative %', fontsize=label, rotation = 270, labelpad=10)
+            if metric == 'MC Error' and (vn == 'massbal' or vn == 'tempchange'):
+                ax.set_xlabel(metric + ' ' + vn_label_dict[vn], fontsize=label)
+            elif metric=='MC Error':
+                ax.set_xlabel(metric + ' (% of mean)', fontsize=label)
+            elif metric == 'Effective N':
+                ax.set_xlabel('Effective Sample Size', fontsize=label)
+            else:
+                ax.set_xlabel(metric, fontsize=label)
+
+            ax.xaxis.set_major_locator(major[metric + ' ' + vn])
+            ax.xaxis.set_minor_locator(minor[metric + ' ' + vn])
+
+            if m_count == 0 or m_count == 1:
+                ax2.yaxis.set_major_locator(plt.NullLocator())
+            if m_count == 1 or m_count == 2:
+                ax.yaxis.set_major_locator(plt.NullLocator())
+
+            # legend
+            #if v_count==3 and m_count==2:
+                #ax2.legend(loc='best', fontsize=legend)
+
+    # Save figure
+    plt.savefig(mcmc_output_hist_fp + 'histrogram_mixed_explicit.png',
                 bbox_inches='tight')
 
 
@@ -1847,13 +2359,13 @@ def compare_priors(filepath, region, iters=15000, burn=0):
     return df_dict
 
 
-def plot_priors(filepath='../MCMC_data/prior_comparison/', region='all', iters=30000, burn=0):
+def plot_prior_sensitivity(filepath='../MCMC_data/prior_comparison/', region='all', iters=30000, burn=0):
     '''
     Plots scatter plots of posterior distribution statistics for
     independent variables.
     '''
     priors = ['trunc', 'uniform']
-    metrics = ['stdev', 'mean']
+    metrics = ['mean', 'stdev']
     variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
     vn_title_dict = {'massbal':'Mass Balance',
                      'precfactor':'Precipitation Factor',
@@ -1861,12 +2373,12 @@ def plot_priors(filepath='../MCMC_data/prior_comparison/', region='all', iters=3
                      'ddfsnow':'DDF Snow'}
     vn_label_dict = {'massbal':'Mass balance\n[mwea]',
                      'precfactor':'Precipitation factor\n[-]',
-                     'tempchange':'Temperature bias\n[degC]',
-                     'ddfsnow':'DDFsnow\n[mwe $degC^{-1} d^{-1}$]'}
+                     'tempchange':'Temperature bias\n[$^{o}$C]',
+                     'ddfsnow':'DDFsnow\n[$10^{-3}$ mwe $^{o}$C$^{-1}$ d$^{-1}$]'}
     prior_title_dict = {'trunc':'Truncated Normal Distribution',
                         'uniform': 'Uniform Distribution'}
     metric_title_dict = {'stdev': 'Standard Deviation',
-                         'mean': 'Mean Value'}
+                         'mean': 'Mean'}
 
     prior_dict = {}
 
@@ -1897,10 +2409,11 @@ def plot_priors(filepath='../MCMC_data/prior_comparison/', region='all', iters=3
     legend=10
     figsize=(6.5, 9)
     dpi=100
-    hspace=0.5
-    wspace=0.4
+    hspace=0.4
+    wspace=0.3
     labelpad1=5
     labelpad2=5
+
     v_len = len(variables)
     p_len = len(priors)
     m_len = len(metrics)
@@ -1942,26 +2455,25 @@ def plot_priors(filepath='../MCMC_data/prior_comparison/', region='all', iters=3
 
             # plot histogram
             ax = plt.subplot(v_len, m_len, m_len*v+m+1)
-            x = prior_dict['trunc'][vn + '_' + metric]
-            y = prior_dict['uniform'][vn + '_' + metric]
-            plt.scatter(x=x, y=y, marker='1')
+            x = prior_dict['trunc'][vn + '_' + metric][::1]
+            y = prior_dict['uniform'][vn + '_' + metric][::1]
+            if metric == 'mean' and vn == 'massbal':
+                plt.scatter(x=x, y=y, marker='o', facecolors='none', edgecolors = 'black', s=0.2)
+            else:
+                plt.scatter(x=x, y=y, marker='o', facecolors='none', edgecolors = 'black', s=0.01)
             plt.plot([-10, 10], [-10, 10], color='black', linewidth=plotline)
 
             ylabel = 'Uniform'
             xlabel = 'Truncated Normal'
 
-            if vn=='ddfsnow':
-                ylabel += ' [$10^{-3}$]'
-                xlabel += ' [$10^{-3}$]'
-
             if v == 0:
-                plt.title(metric_title_dict[metric], fontsize=title, y=suby)
+                plt.title(metric_title_dict[metric], fontsize=label, y=suby)
             if m == 0:
-                ax.set_ylabel(vn_title_dict[vn] + '\n' + ylabel,
+                ax.set_ylabel(vn_label_dict[vn] + '\n\n' + ylabel,
                               fontsize=label, labelpad=labelpad1)
-            else:
-                ax.set_ylabel(ylabel,
-                              fontsize=label, labelpad=labelpad2)
+            #else:
+            #    ax.set_ylabel(ylabel,
+            #                  fontsize=label, labelpad=labelpad2)
 
             ax.set_xticks(ticks[vn + '_' + metric])
             ax.set_yticks(ticks[vn + '_' + metric])
@@ -1980,11 +2492,336 @@ def plot_priors(filepath='../MCMC_data/prior_comparison/', region='all', iters=3
                 ax.set_yticks(c)
                 ax.set_yticklabels(d)
 
-            ax.set_xlabel(xlabel, fontsize=label)
+            if v == 3:
+                ax.set_xlabel(xlabel, fontsize=label, labelpad=labelpad2)
 
-    plt.savefig(mcmc_prior_fp + 'scatter' + 'region' +
-                str(region) + '_' + str(iters) + 'iterations_' +
-                str(burn) + 'burn.jpg',
+    plt.savefig(mcmc_prior_fp + 'prior_sensitivity.jpg',
+                bbox_inches='tight')
+
+
+def plot_posterior_comparison(iters=[1000, 15000, 30000], region='all'):
+    """
+    Compares prior to poster distribution for different chain lengths
+
+
+    Parameters
+    ----------
+    iters : list of ints
+        list of chain lengths for compare posteriors of
+    region : int or 'all'
+        RGI glacier region
+
+    Returns
+    -------
+    .png files
+        saves figure showing how prior and posterior comparison
+    """
+
+    # hard code some variable names (dirty solution)
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+    vn_title_dict = {'massbal':'Mass Balance',
+                     'precfactor':'Precipitation Factor',
+                     'tempchange':'Temperature Bias',
+                     'ddfsnow':'DDF Snow'}
+    metric_title_dict = {'Gelman-Rubin':'Gelman-Rubin Statistic',
+                         'MC Error': 'Monte Carlo Error',
+                         'Effective N': 'Effective Sample Size'}
+    metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'Mass balance [mwea]',
+                 'precfactor':'Precipitation factor [-]',
+                 'tempchange':'Temperature bias [$^{\circ}C$]',
+                 'ddfsnow':'DDF Snow [mwe $^{\circ}C^{-1} d^{-1}$]'}
+    csv_path = '../DEMs/Shean_2018_0806/hma_mb_20180803_1229.csv'
+
+    if region == 'all':
+        regions = ['13', '14', '15']
+        filelist = []
+        for reg in regions:
+            filelist.extend(glob.glob(mcmc_output_netcdf_fp + str(reg) + '*.nc'))
+    else:
+        filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
+
+    filelist = [filelist[2400], filelist[2000]] #2100, 2300 centered
+
+    # hard code font sizes
+    ticks=10
+    suptitle=14
+    title=10
+    titley = 1.05
+    label=10
+    plotline=1.5
+    plotline2=1
+    legend=10
+    figsize=(6.5, 9)
+    dpi=100
+    hspace=0.5
+    wspace=0.4
+    sup_y = 0.97
+    nrows=4
+    ncols=2
+    num_stds=1
+    alpha = 0.7
+    s_alpha = 0.5
+    #color = '#006d24'#'#0176cf'
+    #colors = ['#d6003d', '#9f7c00', '#5d0087']
+    color = 'black'
+    colors = ['#387ea0', '#d20048', '#fcb200']
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    n_len = len(filelist)
+    v_len = len(variables)
+
+
+    for n_count,netcdf in enumerate(filelist):
+
+        ds = xr.open_dataset(netcdf)
+
+        # create subplot for each variable
+        for v_count, vn in enumerate(variables):
+
+            # plot histogram
+            ax = plt.subplot(nrows, ncols, n_len*v_count+n_count+1)
+
+            if vn == 'massbal':
+
+                region_no = float(netcdf[-11:-3])
+                df_all = pd.read_csv(csv_path)
+                mu = df_all[df_all['RGIId'] == region_no]['mb_mwea'].values[0]
+                sigma = df_all[df_all['RGIId'] == region_no]['mb_mwea_sigma'].values[0]
+                boundlow = mu - 3*sigma
+                boundhigh = mu + 3*sigma
+
+            if vn == 'tempchange':
+
+                mu = input.tempchange_mu
+                sigma = input.tempchange_sigma
+                boundlow = input.tempchange_boundlow
+                boundhigh = input.tempchange_boundhigh
+
+            elif vn == 'ddfsnow':
+
+                mu = input.ddfsnow_mu
+                sigma = input.ddfsnow_sigma
+                boundlow = input.ddfsnow_boundlow
+                boundhigh = input.ddfsnow_boundhigh
+
+            elif vn == 'precfactor':
+
+                mu = input.precfactor_mu
+                sigma = input.precfactor_sigma
+                boundlow = input.precfactor_boundlow
+                boundhigh = input.precfactor_boundhigh
+
+            x_range = np.linspace(boundlow,boundhigh,1000)
+            if vn == 'massbal':
+                a, b = (boundlow - mu) / sigma, (boundhigh - mu) / sigma
+                ax.plot(x_range, truncnorm.pdf(x_range, a, b, loc = mu, scale = sigma),
+                         color=color, linewidth=plotline, label='Prior')
+            else:
+                ax.plot(x_range, norm.pdf(x_range, mu, sigma),
+                        color=color, linewidth=plotline)
+
+            k = 0
+            for i in iters:
+
+                for j in range(1):
+
+                    data = ds['mp_value'].sel(chain=j, mp=vn).values[0:i]
+
+                    # plot the actual density distribution
+                    density = gaussian_kde(data)
+                    density.covariance_factor = lambda : .25
+                    density._compute_covariance()
+                    if j == 0:
+                        ax.plot(x_range,density(x_range), color = colors[k],
+                                 linewidth=plotline, label=str(i))
+                    else:
+                        ax.plot(x_range,density(x_range), color = colors[k],
+                                 linewidth=plotline)
+                k += 1
+
+            # niceties
+            if v_count == 0:
+                glac_no  = str(region_no)
+                plt.title('RGI ' + glac_no[0:2] + '-' + glac_no[3:], fontsize=title, y=titley)
+
+            ylabel = 'Probability density'
+
+            if n_count == 0:
+                #ax.set_ylabel(vn_title_dict[vn] + '\n\n' + ylabel, fontsize=label)
+            #else:
+                ax.set_ylabel(ylabel, fontsize=label)
+
+            ax.set_xlabel(vn_label_dict[vn], fontsize=label)
+
+            if vn == 'massbal' and n_count == 0:
+                ax.legend(loc='upper left', fontsize=legend)
+
+    # Save figure
+    plt.savefig(mcmc_output_figures_fp + 'prior_comparison.png',
+                bbox_inches='tight')
+
+
+def plot_posterior_comparison_single_glacier(iters=[1000, 15000], region='all'):
+    """
+    Compares prior to poster distribution for different chain lengths
+
+
+    Parameters
+    ----------
+    iters : list of ints
+        list of chain lengths for compare posteriors of
+    region : int or 'all'
+        RGI glacier region
+
+    Returns
+    -------
+    .png files
+        saves figure showing how prior and posterior comparison
+    """
+
+    # hard code some variable names (dirty solution)
+    variables = ['massbal', 'precfactor', 'tempchange', 'ddfsnow']
+    vn_title_dict = {'massbal':'Mass Balance',
+                     'precfactor':'Precipitation Factor',
+                     'tempchange':'Temperature Bias',
+                     'ddfsnow':'DDF Snow'}
+    metric_title_dict = {'Gelman-Rubin':'Gelman-Rubin Statistic',
+                         'MC Error': 'Monte Carlo Error',
+                         'Effective N': 'Effective Sample Size'}
+    metrics = ['Gelman-Rubin', 'MC Error', 'Effective N']
+    vn_label_dict = {'massbal':'Mass balance [mwea]',
+                 'precfactor':'Precipitation factor [-]',
+                 'tempchange':'Temperature bias [$^{\circ}C$]',
+                 'ddfsnow':'DDF Snow [mwe $^{\circ}C^{-1} d^{-1}$]'}
+    csv_path = '../DEMs/Shean_2018_0806/hma_mb_20180803_1229.csv'
+
+    if region == 'all':
+        regions = ['13', '14', '15']
+        filelist = []
+        for reg in regions:
+            filelist.extend(glob.glob(mcmc_output_netcdf_fp + str(reg) + '*.nc'))
+    else:
+        filelist = glob.glob(mcmc_output_netcdf_fp + str(region) + '*.nc')
+
+    filelist = [filelist[2400]] #2100, 2300 centered
+
+    # hard code font sizes
+    ticks=10
+    suptitle=14
+    title=10
+    titley = 1.05
+    label=10
+    plotline=1.5
+    plotline2=1
+    legend=10
+    figsize=(6.5, 6)
+    dpi=100
+    hspace=0.4
+    wspace=0.3
+    sup_y = 0.97
+    nrows=2
+    ncols=2
+    num_stds=1
+    alpha = 0.7
+    s_alpha = 0.5
+    #color = '#006d24'#'#0176cf'
+    #colors = ['#d6003d', '#9f7c00', '#5d0087']
+    color = 'black'
+    colors = ['#387ea0', '#d20048', '#fcb200']
+    linestyles = ['-', '--', ':']
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    n_len = len(filelist)
+    v_len = len(variables)
+
+
+    for n_count,netcdf in enumerate(filelist):
+
+        ds = xr.open_dataset(netcdf)
+
+        # create subplot for each variable
+        for v_count, vn in enumerate(variables):
+
+            # plot histogram
+            ax = plt.subplot(nrows, ncols, v_count+1)
+
+            if vn == 'massbal':
+
+                region_no = float(netcdf[-11:-3])
+                df_all = pd.read_csv(csv_path)
+                mu = df_all[df_all['RGIId'] == region_no]['mb_mwea'].values[0]
+                sigma = df_all[df_all['RGIId'] == region_no]['mb_mwea_sigma'].values[0]
+                boundlow = mu - 3*sigma
+                boundhigh = mu + 3*sigma
+
+            if vn == 'tempchange':
+
+                mu = input.tempchange_mu
+                sigma = input.tempchange_sigma
+                boundlow = input.tempchange_boundlow
+                boundhigh = input.tempchange_boundhigh
+
+            elif vn == 'ddfsnow':
+
+                mu = input.ddfsnow_mu
+                sigma = input.ddfsnow_sigma
+                boundlow = input.ddfsnow_boundlow
+                boundhigh = input.ddfsnow_boundhigh
+
+            elif vn == 'precfactor':
+
+                mu = input.precfactor_mu
+                sigma = input.precfactor_sigma
+                boundlow = input.precfactor_boundlow
+                boundhigh = input.precfactor_boundhigh
+
+            x_range = np.linspace(boundlow,boundhigh,1000)
+            if vn == 'massbal':
+                a, b = (boundlow - mu) / sigma, (boundhigh - mu) / sigma
+                ax.plot(x_range, truncnorm.pdf(x_range, a, b, loc = mu, scale = sigma),
+                         color=color, linewidth=plotline, label='Prior')
+            else:
+                ax.plot(x_range, norm.pdf(x_range, mu, sigma),
+                        color=color, linewidth=plotline)
+
+            k = 0
+            for i in iters:
+
+                for j in range(3):
+
+                    data = ds['mp_value'].sel(chain=j, mp=vn).values[0:i]
+
+                    # plot the actual density distribution
+                    density = gaussian_kde(data)
+                    density.covariance_factor = lambda : .25
+                    density._compute_covariance()
+                    if j == 0:
+                        ax.plot(x_range,density(x_range), color = colors[k],
+                                 linewidth=plotline, label=str(i), linestyle=linestyles[j])
+                    else:
+                        ax.plot(x_range,density(x_range), color = colors[k],
+                                 linewidth=plotline, linestyle=linestyles[j])
+                k += 1
+
+            ylabel = 'Probability density'
+
+            if v_count % 2 == 0:
+                #ax.set_ylabel(vn_title_dict[vn] + '\n\n' + ylabel, fontsize=label)
+            #else:
+                ax.set_ylabel(ylabel, fontsize=label)
+
+            ax.set_xlabel(vn_label_dict[vn], fontsize=label)
+
+            if vn == 'massbal' and n_count == 0:
+                ax.legend(loc='upper left', fontsize=legend)
+
+    # Save figure
+    plt.savefig(mcmc_output_figures_fp + 'prior_comparison.png',
                 bbox_inches='tight')
 
 
@@ -2038,14 +2875,15 @@ for n, glac_str_noreg in enumerate(rgi_glac_number[0:4]):
     #        filename = mcmc_output_tables_fp + glacier_str + '.txt')
 '''
 # histogram assessments
-iterations = np.arange(1000, 31000, 3000)
-iterations = np.append(iterations, 30000)
+#iterations = np.arange(1000, 31000, 3000)
+#iterations = np.append(iterations, 30000)
+#plot_posterior_comparison()
 #write_table2(iters=iterations, region='all', burn=0)
-find_means(iters=iterations, region='all', burn=0)
-#plot_mc_results3(iters=iterations, region='all', burn=0)
-#for iters in [15000]:
-#    for region in ['all']:
-        #write_table(region=region, iters=iters, burn=0)
+#find_means(iters=iterations, region='all', burn=0)
+#assessment_vs_chain_length(iters=iterations, region='all', burn=0, mean=False)
+for iters in [15000]:
+    for region in [14]:
+        write_table(region=region, iters=iters, burn=0)
         #plot_histograms(region=region, iters=iters, burn=0)
         #plot_histograms_2(region=region, iters=iters, burn=0)
         #compare_priors(mcmc_data_fp, region=region, iters=iters, burn=0)
